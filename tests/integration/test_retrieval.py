@@ -10,8 +10,9 @@ import pytest_asyncio
 
 from docqa.adapters.llm.stub import StubLLM
 from docqa.adapters.rerank.cross_encoder import FastEmbedReranker
+from docqa.adapters.tracing.noop_tracer import NoopTracer
 from docqa.adapters.vectorstore.mongo_store import MongoVectorStore
-from docqa.bootstrap import build_container, build_query_stack, init_database
+from docqa.bootstrap import build_container, init_database
 from docqa.domain.models import AccessFilter, IngestionStatus
 from docqa.generation.answer_generator import AnswerGenerator
 from docqa.generation.citation_validator import validate_citations
@@ -51,7 +52,7 @@ def retriever(container, fusion: str) -> HybridRetriever:
         settings.retrieval_cfg(fusion=fusion),
         settings.embedding.dense_model,
     )
-    return HybridRetriever(container.embedder, store, settings.retrieval.fused_k)
+    return HybridRetriever(container.embedder, store, settings.retrieval.fused_k, NoopTracer())
 
 
 @pytest.mark.parametrize("fusion", ["server", "app"])
@@ -105,13 +106,13 @@ async def test_answer_flow_cites_the_correct_page(ingested):
     """retrieve -> re-rank -> prompt -> (stub) LLM -> validate, as scripts/ask_once.py does."""
     container, access = ingested
     settings = container.settings
-    stack = build_query_stack(settings, container)
+    stack = container.query_deps
     question = "What is the refund window?"
     candidates = await retriever(container, "server").retrieve(question, access)
     top = await asyncio.to_thread(
         stack.reranker.rerank, question, candidates, settings.retrieval.top_k
     )
-    messages = stack.prompt_builder.build(stack.answer_prompt, top, question)
+    messages = stack.prompt_builder.build(stack.template, top, question)
     refund = next(c for c in top if REFUND in c.chunk.text)
     assert f"id={refund.chunk.id}" in messages[1].content
 

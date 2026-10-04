@@ -23,6 +23,9 @@ class FakeContainer:
     def start(self) -> None:
         pass
 
+    def llm_states(self) -> dict[str, str]:
+        return {"gemini_flash": "closed", "groq_oss_20b": "open"}
+
     async def close(self) -> None:
         pass
 
@@ -42,6 +45,7 @@ def test_healthy_when_reachable_and_indexes_ready():
     assert response.status_code == 200
     body = response.json()
     assert body["mongodb"] == "ok" and len(body["config_hash"]) == 64
+    assert body["llm_providers"] == {"gemini_flash": "closed", "groq_oss_20b": "open"}
 
 
 def test_503_when_an_index_is_not_ready():

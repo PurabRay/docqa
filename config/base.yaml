@@ -79,6 +79,9 @@ generation:
   max_answer_tokens: 600
   max_rewrite_tokens: 100
   max_false_abstention_rate: 0.10   # calibration target (PRD: <= 10% false abstentions)
+  history_turns: 3                  # turns given to the rewriter (FR-10)
+  degraded_passages: 3              # passages shown when every LLM is down (PRD resilience)
+  sse_ping_s: 15                    # keep-alive comment on the /query stream
 
 prompts: {answer: v1, rewrite: v1}
 
@@ -92,4 +95,18 @@ limits:
 
 cache: {backend: memory, ttl_seconds: 3600}   # "mongo" uses the answer_cache TTL collection
 
-tracing: {backend: langfuse, sample_judge_rate: 0.2}
+alerts:                             # PRD "Monitoring" thresholds, checked by scripts/check_alerts.py
+  window_minutes: 10
+  p95_latency_s: 4.0
+  error_rate: 0.02
+  abstention_min: 0.05
+  abstention_max: 0.30
+  max_ops_per_s: 60
+  ops_sample_s: 5
+
+tracing:
+  backend: langfuse                 # falls back to noop when LANGFUSE_* keys are not set
+  sample_judge_rate: 0.2
+  # Equivalent paid cost reported per query (PRD list prices for gpt-4o-mini, USD per 1M tokens).
+  cost_per_million_input: 0.15
+  cost_per_million_output: 0.60

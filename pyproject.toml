@@ -29,6 +29,7 @@ dependencies = [
     "streamlit-pdf-viewer>=0.0.20",
     "tenacity>=9.0",
     "rank-bm25>=0.2",  # BM25 for the in-memory vector store used in tests
+    "en-core-web-sm",
 ]
 
 [dependency-groups]
@@ -88,9 +89,9 @@ check_untyped_defs = true
 module = ["docqa.domain.*", "docqa.ports.*", "docqa.services.*"]
 strict = true
 
-# PDF libraries and rank_bm25 ship partial or no type hints; treat them as untyped.
+# PDF libraries, rank_bm25 and Presidio ship partial or no type hints; treat them as untyped.
 [[tool.mypy.overrides]]
-module = ["pymupdf", "pymupdf.*", "pymupdf4llm", "pymupdf4llm.*", "pdfplumber", "pdfplumber.*", "rank_bm25"]
+module = ["pymupdf", "pymupdf.*", "pymupdf4llm", "pymupdf4llm.*", "pdfplumber", "pdfplumber.*", "rank_bm25", "presidio_analyzer.*", "presidio_anonymizer.*"]
 ignore_missing_imports = true
 follow_imports = "skip"
 
@@ -110,3 +111,6 @@ markers = [
     "slow: takes more than a few seconds",
     "contract: the same suite run against every adapter of a port",
 ]
+
+[tool.uv.sources]
+en-core-web-sm = { url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl" }

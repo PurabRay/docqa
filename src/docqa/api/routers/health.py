@@ -26,7 +26,7 @@ async def health(
         status="ok" if db.healthy else "unhealthy",
         mongodb="ok" if db.reachable else "unreachable",
         search_indexes=db.search_indexes,
-        llm_providers={},  # filled in once the LLM router lands (M2)
+        llm_providers=container.llm_states(),
         version=version("docqa"),
         config_hash=container.settings.config_hash(),
     )

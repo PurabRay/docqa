@@ -1,4 +1,4 @@
-"""Ask one question end to end: retrieve -> re-rank -> generate -> validate.
+"""Ask one question end to end through QueryService and print the events.
 
 Usage:
     uv run python scripts/ask_once.py "What is the refund window?" --session-id demo
@@ -17,12 +17,19 @@ import sys
 from pathlib import Path
 
 from docqa.api.deps import owner_id
-from docqa.bootstrap import Container, build_container, build_query_stack, init_database
+from docqa.bootstrap import Container, build_container, init_database
 from docqa.domain.errors import DocQAError
-from docqa.domain.models import AccessFilter, IngestionStatus, RetrievedChunk, Token
-from docqa.generation.answer_generator import Final
-from docqa.generation.citation_validator import validate_citations
-from docqa.retrieval.abstention import best_score, should_abstain
+from docqa.domain.models import (
+    Abstained,
+    Citations,
+    Completed,
+    Degraded,
+    Error,
+    IngestionStatus,
+    Meta,
+    QueryRequest,
+    Token,
+)
 from docqa.settings import load_settings
 
 
@@ -38,9 +45,7 @@ async def ingest_if_needed(container: Container, owner: str, pdf: Path) -> None:
 
 async def ask(question: str, session_id: str, pdf: Path | None) -> int:
     """Answer and print; return a process exit code."""
-    settings = load_settings()
-    container = build_container(settings)
-    stack = build_query_stack(settings, container)
+    container = build_container(load_settings())
     owner = owner_id(session_id)
     try:
         await init_database(container)
@@ -52,22 +57,12 @@ async def ask(question: str, session_id: str, pdf: Path | None) -> int:
         if not docs:
             print("No ready documents for this session; pass --pdf.")
             return 1
-        candidates = await stack.retriever.retrieve(
-            question, AccessFilter(owner_id=owner, doc_ids=docs)
+        request = QueryRequest(
+            owner_id=owner, session_id=session_id, question=question, doc_ids=docs
         )
-        top = await asyncio.to_thread(
-            stack.reranker.rerank, question, candidates, settings.retrieval.top_k
-        )
-        print(f"retrieved {len(candidates)}, best re-rank score {best_score(top)}")
-        if should_abstain(top, settings.retrieval.abstain_threshold):
-            print("ABSTAIN: I couldn't find this in your documents.")
-            return 0
-        messages = stack.prompt_builder.build(stack.answer_prompt, top, question)
-        async for event in stack.generator.generate(messages):
-            if isinstance(event, Token):
-                print(event.text, end="", flush=True)
-            elif isinstance(event, Final):
-                print_result(event, top)
+        await container.query.check(request)
+        async for event in container.query.answer(request):
+            print_event(event)
         return 0
     except DocQAError as err:
         print(f"\nfailed: [{err.code}] {err.message}", file=sys.stderr)
@@ -76,16 +71,26 @@ async def ask(question: str, session_id: str, pdf: Path | None) -> int:
         await container.close()
 
 
-def print_result(event: Final, top: list[RetrievedChunk]) -> None:
-    """Print provider, parse style and the citations that survived validation."""
-    validated = validate_citations(event.parsed, top)
-    print(f"\n\nprovider={event.provider} style={event.style}")
-    print(f"sufficient_context={validated.sufficient_context}")
-    if event.warning:
-        print(f"warning: {event.warning}")
-    for c in validated.citations:
-        print(f'  [{c.doc_name}, p. {c.page}] "{c.quote}"')
-    print(f"verified={validated.verified} dropped={validated.dropped}")
+def print_event(event: object) -> None:
+    """One line per event; tokens print inline as they stream."""
+    if isinstance(event, Token):
+        print(event.text, end="", flush=True)
+    elif isinstance(event, Meta):
+        print(f"[trace {event.trace_id}] rewritten={event.rewritten_question}")
+    elif isinstance(event, Citations):
+        print(f"\n\ncitations ({event.dropped} dropped):")
+        for c in event.citations:
+            print(f'  [{c.doc_name}, p. {c.page}] "{c.quote}"')
+    elif isinstance(event, Abstained):
+        print(f"\nABSTAIN ({event.reason}): I couldn't find this in your documents.")
+    elif isinstance(event, Degraded):
+        print(f"\nDEGRADED: no model available; top {len(event.passages)} passages returned.")
+    elif isinstance(event, Error):
+        print(f"\nERROR [{event.code}] {event.message}")
+    elif isinstance(event, Completed):
+        print(
+            f"done: provider={event.provider} latency={event.latency_ms} ms cached={event.cached}"
+        )
 
 
 def main() -> None:

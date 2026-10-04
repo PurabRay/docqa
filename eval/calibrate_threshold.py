@@ -50,14 +50,14 @@ async def best_scores(
 ) -> list[tuple[float, bool]]:
     """Run retrieve -> re-rank for each question and keep its best score."""
     from docqa.api.deps import owner_id
-    from docqa.bootstrap import build_container, build_query_stack
+    from docqa.bootstrap import build_container
     from docqa.domain.models import AccessFilter, IngestionStatus
     from docqa.retrieval.abstention import best_score
     from docqa.settings import load_settings
 
     settings = load_settings()
     container = build_container(settings)
-    stack = build_query_stack(settings, container)
+    stack = container.query_deps
     owner = owner_id(session_id)
     docs = [
         d.id for d in await container.documents.list(owner) if d.status is IngestionStatus.READY

@@ -12,6 +12,7 @@ from docqa.domain.errors import DocQAError, DocumentNotFoundError, FileTooLargeE
 from docqa.domain.models import DocumentRecord, IngestionStatus, IngestJob, new_id
 from docqa.guardrails.storage_guard import StorageGuard
 from docqa.ingestion.validator import BYTES_PER_MB, validate_pdf
+from docqa.ports.cache import AnswerCache
 from docqa.ports.repository import DocumentRepository
 from docqa.ports.vector_store import VectorStore
 
@@ -28,7 +29,9 @@ class DocumentService:
         limits: LimitsConfig,
         upload_dir: Path,
         embed_model: str,
+        cache: AnswerCache,
     ) -> None:
+        self._cache = cache
         self._repo = repo
         self._store = store
         self._guard = guard
@@ -75,11 +78,12 @@ class DocumentService:
         return doc
 
     async def delete(self, owner_id: str, doc_id: str) -> None:
-        """Remove the document's chunks and file, and mark it deleted."""
+        """Remove the document's chunks, cached answers and file, and mark it deleted."""
         doc = await self.get(owner_id, doc_id)
         if doc.status is IngestionStatus.DELETED:
             raise DocumentNotFoundError()
         await self._store.delete_document(doc_id, owner_id)
+        await self._cache.purge_document(doc_id)
         await self._repo.set_status(doc_id, IngestionStatus.DELETED)
         (self._upload_dir / f"{doc_id}.pdf").unlink(missing_ok=True)
 

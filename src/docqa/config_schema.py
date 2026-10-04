@@ -128,6 +128,9 @@ class GenerationConfig(Section):
     max_answer_tokens: int = Field(ge=1)
     max_rewrite_tokens: int = Field(ge=1)
     max_false_abstention_rate: float = Field(ge=0, le=1)
+    history_turns: int = Field(ge=0)
+    degraded_passages: int = Field(ge=1)
+    sse_ping_s: float = Field(gt=0)
 
 
 class PromptsConfig(Section):
@@ -155,11 +158,25 @@ class CacheConfig(Section):
     ttl_seconds: int = Field(ge=1)
 
 
+class AlertsConfig(Section):
+    """Alert thresholds from the PRD's monitoring table."""
+
+    window_minutes: int = Field(ge=1)
+    p95_latency_s: float = Field(gt=0)
+    error_rate: float = Field(ge=0, le=1)
+    abstention_min: float = Field(ge=0, le=1)
+    abstention_max: float = Field(ge=0, le=1)
+    max_ops_per_s: float = Field(gt=0)
+    ops_sample_s: float = Field(gt=0)
+
+
 class TracingConfig(Section):
     """Tracing backend and online-judge sampling."""
 
     backend: Literal["langfuse", "noop"]
     sample_judge_rate: float = Field(ge=0, le=1)
+    cost_per_million_input: float = Field(ge=0)
+    cost_per_million_output: float = Field(ge=0)
 
 
 class AppConfig(Section):
@@ -175,6 +192,7 @@ class AppConfig(Section):
     prompts: PromptsConfig
     limits: LimitsConfig
     cache: CacheConfig
+    alerts: AlertsConfig
     tracing: TracingConfig
 
 

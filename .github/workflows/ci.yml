@@ -39,9 +39,9 @@ jobs:
         with:
           path: ~/.cache/fastembed
           key: fastembed-${{ hashFiles('config/base.yaml') }}
-      - name: integration tests
+      - name: integration and e2e tests
         shell: bash  # explicit bash enables pipefail, so a pytest failure fails the step
-        run: uv run pytest -m integration -s -q -rfEsx | tee pytest.log  # -s prints timings
+        run: uv run pytest -m "integration or e2e" -s -q -rfEsx | tee pytest.log  # -s prints timings
       - name: publish results as annotations (logs need sign-in; annotations do not)
         if: always()
         run: |

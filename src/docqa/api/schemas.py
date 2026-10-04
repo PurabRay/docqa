@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class ErrorBody(BaseModel):
@@ -24,6 +24,23 @@ class HealthBody(BaseModel):
     llm_providers: dict[str, str]
     version: str
     config_hash: str
+
+
+class QueryBody(BaseModel):
+    """Body of POST /query."""
+
+    session_id: str = Field(min_length=1)
+    question: str
+    doc_ids: list[str] = Field(min_length=1)
+
+
+class FeedbackBody(BaseModel):
+    """Body of POST /feedback."""
+
+    trace_id: str = Field(min_length=1)
+    session_id: str = Field(min_length=1)
+    rating: Literal[-1, 1]
+    comment: str | None = Field(default=None, max_length=1000)
 
 
 class UploadAccepted(BaseModel):

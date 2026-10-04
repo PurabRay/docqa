@@ -10,4 +10,4 @@ embedding:
   dense_model: "nomic-ai/nomic-embed-text-v1.5"
   dim: 768
 
-tracing: {backend: langfuse, sample_judge_rate: 0.2}
+tracing: {backend: langfuse, sample_judge_rate: 0.2}   # cost keys come from base.yaml
