@@ -41,9 +41,9 @@ jobs:
           key: fastembed-${{ hashFiles('config/base.yaml') }}
       - name: integration tests
         shell: bash  # explicit bash enables pipefail, so a pytest failure fails the step
-        run: uv run pytest -m integration -s -q -rfEs | tee pytest.log  # -s prints timings
+        run: uv run pytest -m integration -s -q -rfEsx | tee pytest.log  # -s prints timings
       - name: publish results as annotations (logs need sign-in; annotations do not)
         if: always()
         run: |
           grep -E "ready in|bytes per chunk|re-rank 20 pairs|passed|failed|skipped" pytest.log | sed 's/^/::notice::/' || true
-          grep -E "^(FAILED|ERROR) " pytest.log | cut -c1-900 | sed 's/^/::error::/' || true
+          grep -E "^(FAILED|ERROR|XFAIL) " pytest.log | cut -c1-900 | sed 's/^/::error::/' || true
