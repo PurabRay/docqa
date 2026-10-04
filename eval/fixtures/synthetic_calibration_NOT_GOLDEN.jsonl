@@ -1,0 +1,15 @@
+{"_note": "SYNTHETIC test data for eval/calibrate_threshold.py. NOT the golden set; never use for reported numbers."}
+{"question": "synthetic answerable 1", "is_answerable": true, "best_score": 6.1}
+{"question": "synthetic answerable 2", "is_answerable": true, "best_score": 5.2}
+{"question": "synthetic answerable 3", "is_answerable": true, "best_score": 4.0}
+{"question": "synthetic answerable 4", "is_answerable": true, "best_score": 3.3}
+{"question": "synthetic answerable 5", "is_answerable": true, "best_score": 2.9}
+{"question": "synthetic answerable 6", "is_answerable": true, "best_score": 2.4}
+{"question": "synthetic answerable 7", "is_answerable": true, "best_score": 1.8}
+{"question": "synthetic answerable 8", "is_answerable": true, "best_score": 1.1}
+{"question": "synthetic answerable 9", "is_answerable": true, "best_score": 0.4}
+{"question": "synthetic answerable 10", "is_answerable": true, "best_score": -2.5}
+{"question": "synthetic unanswerable 1", "is_answerable": false, "best_score": -6.0}
+{"question": "synthetic unanswerable 2", "is_answerable": false, "best_score": -4.2}
+{"question": "synthetic unanswerable 3", "is_answerable": false, "best_score": -1.0}
+{"question": "synthetic unanswerable 4", "is_answerable": false, "best_score": 0.9}

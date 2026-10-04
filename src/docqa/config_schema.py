@@ -24,7 +24,9 @@ class ProviderConfig(Section):
     model: str
     api_key_env: str | None = None  # None for keyless providers such as Ollama
     timeout_s: float = Field(gt=0)
-    json_schema: bool
+    json_schema: bool  # supports response_format json_schema; else JSON mode
+    json_mode: bool = True  # supports response_format json_object; else plain text
+    extra_body: dict[str, Any] = {}
 
 
 class CircuitBreakerConfig(Section):
@@ -40,6 +42,8 @@ class LLMConfig(Section):
     router: list[str] = Field(min_length=1)
     providers: dict[str, ProviderConfig]
     circuit_breaker: CircuitBreakerConfig
+    retry_on_minute_429: int = Field(ge=0)
+    retry_wait_s: float = Field(ge=0)
 
     @model_validator(mode="after")
     def _router_names_exist(self) -> LLMConfig:
@@ -115,6 +119,15 @@ class RetrievalConfig(Section):
     rerank_model: str
     top_k: int = Field(ge=1)
     abstain_threshold: float
+    rerank_max_tokens: int = Field(ge=1)
+
+
+class GenerationConfig(Section):
+    """Answer and rewrite budgets, and the abstention calibration target."""
+
+    max_answer_tokens: int = Field(ge=1)
+    max_rewrite_tokens: int = Field(ge=1)
+    max_false_abstention_rate: float = Field(ge=0, le=1)
 
 
 class PromptsConfig(Section):
@@ -158,6 +171,7 @@ class AppConfig(Section):
     chunking: ChunkingConfig
     ingestion: IngestionConfig
     retrieval: RetrievalConfig
+    generation: GenerationConfig
     prompts: PromptsConfig
     limits: LimitsConfig
     cache: CacheConfig

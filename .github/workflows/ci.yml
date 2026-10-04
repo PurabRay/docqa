@@ -43,4 +43,4 @@ jobs:
         run: uv run pytest -m integration -s -q -rs | tee pytest.log  # -s prints ingestion numbers
       - name: publish ingestion numbers as annotations
         if: always()
-        run: grep -E "ready in|bytes per chunk|passed|failed|skipped" pytest.log | sed 's/^/::notice::/' || true
+        run: grep -E "ready in|bytes per chunk|re-rank 20 pairs|passed|failed|skipped" pytest.log | sed 's/^/::notice::/' || true

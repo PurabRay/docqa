@@ -2,13 +2,16 @@
 
 Every pipeline takes an AccessFilter and pre-filters owner_id and doc_id inside the
 search stage itself, so another owner's chunks are never even scored.
-The hybrid $rankFusion pipeline arrives in M3.
+
+$rankFusion rules (docs/DESIGN.md): sub-pipelines may only use $search,
+$vectorSearch, $match, $sort and $geoNear, so $project comes after the fusion.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
+from docqa.config_schema import RetrievalConfig
 from docqa.domain.errors import AccessFilterMissingError
 from docqa.domain.models import AccessFilter
 
@@ -59,3 +62,85 @@ def vector_count_pipeline(
         "filter": vector_filter(access),
     }
     return [{"$vectorSearch": search}, {"$project": {"_id": 1}}]
+
+
+def vector_stage(
+    vector: list[float], access: AccessFilter, index: str, cfg: RetrievalConfig
+) -> Stage:
+    """Approximate vector search over the allowed documents."""
+    return {
+        "$vectorSearch": {
+            "index": index,
+            "path": "embedding",
+            "queryVector": vector,
+            "numCandidates": cfg.num_candidates,
+            "limit": cfg.vector_k,
+            "filter": vector_filter(access),
+        }
+    }
+
+
+def text_stage(text: str, access: AccessFilter, index: str) -> Stage:
+    """Full-text (BM25) search over the allowed documents."""
+    return {
+        "$search": {
+            "index": index,
+            "compound": {
+                "must": [{"text": {"query": text, "path": "text"}}],
+                "filter": text_filter(access),
+            },
+        }
+    }
+
+
+def hybrid_pipeline(
+    q_vec: list[float],
+    q_text: str,
+    access: AccessFilter,
+    cfg: RetrievalConfig,
+    *,
+    vector_index: str,
+    text_index: str,
+) -> list[Stage]:
+    """One $rankFusion aggregation over a vector branch and a text branch."""
+    branches = {
+        "vector": [vector_stage(q_vec, access, vector_index, cfg)],
+        "text": [text_stage(q_text, access, text_index), {"$limit": cfg.text_k}],
+    }
+    return [
+        {
+            "$rankFusion": {
+                "input": {"pipelines": branches},
+                "combination": {
+                    "weights": {"vector": cfg.weights.vector, "text": cfg.weights.text}
+                },
+                "scoreDetails": True,
+            }
+        },
+        {"$limit": cfg.fused_k},
+        {"$project": {"embedding": 0}},
+        {"$addFields": {"fusion": {"$meta": "scoreDetails"}}},
+    ]
+
+
+def vector_only_pipeline(
+    q_vec: list[float], access: AccessFilter, cfg: RetrievalConfig, *, vector_index: str
+) -> list[Stage]:
+    """Vector branch alone (fusion: app, and the vector-only ablation)."""
+    return [
+        vector_stage(q_vec, access, vector_index, cfg),
+        {"$project": {"embedding": 0}},
+        {"$addFields": {"score": {"$meta": "vectorSearchScore"}}},
+    ]
+
+
+def text_only_pipeline(
+    q_text: str, access: AccessFilter, cfg: RetrievalConfig, *, text_index: str
+) -> list[Stage]:
+    """Text branch alone (fusion: app)."""
+    return [
+        text_stage(q_text, access, text_index),
+        {"$limit": cfg.text_k},
+        {"$project": {"embedding": 0}},
+        {"$addFields": {"score": {"$meta": "searchScore"}}},
+    ]

@@ -91,6 +91,10 @@ class RateLimitedError(DocQAError):
 
     code, http_status = "rate_limited", 429
 
+    def __init__(self, message: str | None = None, *, daily_quota: bool = False) -> None:
+        super().__init__(message)
+        self.daily_quota = daily_quota  # True: retrying today is pointless
+
 
 class ProviderUnavailableError(DocQAError):
     """The language model provider is unavailable."""

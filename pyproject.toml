@@ -28,6 +28,7 @@ dependencies = [
     "streamlit>=1.38",
     "streamlit-pdf-viewer>=0.0.20",
     "tenacity>=9.0",
+    "rank-bm25>=0.2",  # BM25 for the in-memory vector store used in tests
 ]
 
 [dependency-groups]
@@ -41,7 +42,6 @@ dev = [
     "testcontainers>=4.8",
     "locust>=2.31",
     "ragas>=0.2",
-    "rank-bm25>=0.2",
 ]
 
 [build-system]
@@ -88,9 +88,9 @@ check_untyped_defs = true
 module = ["docqa.domain.*", "docqa.ports.*", "docqa.services.*"]
 strict = true
 
-# PDF libraries ship partial or no type hints; treat them as untyped.
+# PDF libraries and rank_bm25 ship partial or no type hints; treat them as untyped.
 [[tool.mypy.overrides]]
-module = ["pymupdf", "pymupdf.*", "pymupdf4llm", "pymupdf4llm.*", "pdfplumber", "pdfplumber.*"]
+module = ["pymupdf", "pymupdf.*", "pymupdf4llm", "pymupdf4llm.*", "pdfplumber", "pdfplumber.*", "rank_bm25"]
 ignore_missing_imports = true
 follow_imports = "skip"
 
@@ -108,4 +108,5 @@ markers = [
     "eval: golden-set evaluation (uses real providers)",
     "live: calls a real hosted provider",
     "slow: takes more than a few seconds",
+    "contract: the same suite run against every adapter of a port",
 ]

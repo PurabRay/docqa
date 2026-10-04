@@ -1,7 +1,6 @@
 """Domain models (docs/DESIGN.md, "Domain models"). No MongoDB, HTTP or vendor code here.
 
-Models for later milestones (Citation, Answer, query events) are added
-when the code that uses them lands.
+Query events are added when the query service lands (M3, prompt 7).
 """
 
 from __future__ import annotations
@@ -67,6 +66,12 @@ class Chunk(BaseModel):
     section: str | None = None
     content_hash: str
     flagged_injection: bool = False
+    # Character offsets in ``text`` where pages page_start+1, page_start+2, ... begin.
+    page_offsets: list[int] = []
+
+    def page_at(self, offset: int) -> int:
+        """The page that holds the character at ``offset``."""
+        return self.page_start + sum(1 for start in self.page_offsets if start <= offset)
 
 
 class EmbeddedChunk(BaseModel):
@@ -85,6 +90,27 @@ class RetrievedChunk(BaseModel):
     vector_rank: int | None = None
     text_rank: int | None = None
     rerank_score: float | None = None
+
+
+class Citation(BaseModel):
+    """A verified pointer from an answer to a page of a document."""
+
+    chunk_id: str
+    doc_name: str
+    page: int = Field(ge=1)
+    quote: str  # verbatim text the claim rests on
+
+
+class Answer(BaseModel):
+    """A validated answer and its surviving citations."""
+
+    text: str
+    citations: list[Citation]
+    dropped_citations: int = 0
+    verified: bool  # False when no citation survived validation
+    abstained: bool = False
+    provider: str
+    prompt_version: str
 
 
 class DocumentRecord(BaseModel):

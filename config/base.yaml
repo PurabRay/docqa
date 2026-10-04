@@ -16,13 +16,16 @@ llm:
       model: "openai/gpt-oss-20b"
       api_key_env: GROQ_API_KEY
       timeout_s: 8
-      json_schema: false
+      json_schema: false              # falls back to JSON mode
     ollama_qwen:
       base_url: "http://ollama:11434/v1"
       model: "qwen3.5:4b"
       timeout_s: 60
       json_schema: true
+      extra_body: {think: false}      # Ollama: no reasoning tokens (latency, broken JSON)
   circuit_breaker: {failures_to_open: 3, open_seconds: 60}
+  retry_on_minute_429: 1            # retries after a per-minute 429; daily-quota 429s never retry
+  retry_wait_s: 2
 
 mongodb:
   uri_env: MONGODB_URI              # atlas-local in dev/CI, Atlas free cluster in the demo
@@ -69,7 +72,13 @@ retrieval:
   weights: {vector: 1.0, text: 1.0} # RRF constant is fixed at 60 by $rankFusion
   rerank_model: "Xenova/ms-marco-MiniLM-L-6-v2"
   top_k: 5
-  abstain_threshold: 0.0            # calibrated on the golden dev split
+  abstain_threshold: 0.0            # calibrated on the golden dev split (eval/calibrate_threshold.py)
+  rerank_max_tokens: 512            # MiniLM truncates longer (query, chunk) pairs
+
+generation:
+  max_answer_tokens: 600
+  max_rewrite_tokens: 100
+  max_false_abstention_rate: 0.10   # calibration target (PRD: <= 10% false abstentions)
 
 prompts: {answer: v1, rewrite: v1}
 

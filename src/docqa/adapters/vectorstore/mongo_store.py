@@ -1,7 +1,6 @@
 """MongoVectorStore: chunk documents with float32 vectors in chunks_<model>.
 
-This milestone covers the write side: upsert, wait for search-index sync and
-delete. Hybrid search ($rankFusion) arrives in M3.
+Write side here; hybrid search lives in mongo_search.py.
 """
 
 from __future__ import annotations
@@ -16,7 +15,8 @@ from pymongo.asynchronous.database import AsyncDatabase
 from docqa.adapters.mongo import codecs, indexes
 from docqa.adapters.mongo.client import Document, translate_errors
 from docqa.adapters.mongo.pipelines import text_count_pipeline, vector_count_pipeline
-from docqa.config_schema import MongoConfig, SearchIndex
+from docqa.adapters.vectorstore import mongo_search
+from docqa.config_schema import MongoConfig, RetrievalConfig, SearchIndex
 from docqa.domain.errors import EmbeddingVersionMismatchError, IndexSyncTimeoutError
 from docqa.domain.models import AccessFilter, EmbeddedChunk, HybridQuery, RetrievedChunk
 
@@ -27,6 +27,7 @@ class MongoVectorStore:
     Args:
         db: Handle to the docqa database.
         cfg: The ``mongodb`` config section.
+        retrieval: The ``retrieval`` config section (fusion mode, k values, weights).
         collection: Name of the chunks collection for the active model.
         embed_model: The configured embedding model; other models are refused.
         search_indexes: Definitions for ensure_indexes().
@@ -36,12 +37,14 @@ class MongoVectorStore:
         self,
         db: AsyncDatabase[Document],
         cfg: MongoConfig,
+        retrieval: RetrievalConfig,
         collection: str,
         embed_model: str,
         search_indexes: list[SearchIndex],
     ) -> None:
         self._chunks = db[collection]
         self._cfg = cfg
+        self._retrieval = retrieval
         self._embed_model = embed_model
         self._search_indexes = search_indexes
         self._model_checked = False
@@ -96,8 +99,10 @@ class MongoVectorStore:
     async def search(
         self, query: HybridQuery, access: AccessFilter, limit: int
     ) -> list[RetrievedChunk]:
-        """Hybrid search. Not implemented until M3."""
-        raise NotImplementedError("Hybrid search ($rankFusion) arrives in M3.")
+        """Hybrid search restricted to ``access``; at most ``limit`` results, best first."""
+        await self._check_model()
+        results = await mongo_search.search(self._chunks, query, access, self._retrieval, self._cfg)
+        return results[:limit]
 
     async def delete_document(self, doc_id: str, owner_id: str) -> int:
         """Delete every chunk of the document; return how many were deleted."""

@@ -66,6 +66,16 @@ class Settings(AppConfig):
         slug = re.sub(r"[^a-z0-9]+", "_", self.embedding.dense_model.lower()).strip("_")
         return self.mongodb.chunks_collection.format(embed_model_slug=slug)
 
+    @property
+    def prompts_dir(self) -> Path:
+        """Folder with prompts/<name>/<version>.yaml, next to config/."""
+        return self.config_dir.parent / "prompts"
+
+    def optional_secret(self, env_name: str) -> str | None:
+        """The secret's value, or None if it is not set."""
+        value: SecretStr | None = getattr(self.secrets, env_name.lower(), None)
+        return value.get_secret_value() if value is not None and value.get_secret_value() else None
+
     def mongodb_uri(self) -> str:
         """Return the MongoDB connection string. Never log it: it carries credentials."""
         return self.secrets.require(self.mongodb.uri_env)

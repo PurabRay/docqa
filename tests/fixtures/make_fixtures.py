@@ -15,7 +15,7 @@ BODY = pymupdf.Rect(60, 110, A4.width - 60, A4.height - 60)
 KNOWN_SENTENCES = {
     3: "The refund window is 30 days from the date of delivery.",
     7: "Annual revenue in FY2025 was 4.2 million euros.",
-    11: "Employees accrue 25 days of paid leave per year.",
+    11: "Under clause 14.3(b), employees accrue 25 days of paid leave per year.",
 }
 SPANNING_START = "This paragraph starts on page five and keeps going"
 SPANNING_END = "until it finally ends on page six."

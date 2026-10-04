@@ -16,13 +16,17 @@ from docqa.adapters.mongo.client import MongoConnection
 from docqa.adapters.mongo.health import MongoHealthProbe
 from docqa.adapters.mongo.indexes import IndexAction, initialize_database
 from docqa.adapters.mongo.storage_meter import MongoStorageMeter
+from docqa.adapters.rerank.cross_encoder import FastEmbedReranker
 from docqa.adapters.storage.mongo_repository import MongoDocumentRepository
 from docqa.adapters.vectorstore.mongo_store import MongoVectorStore
 from docqa.guardrails.storage_guard import StorageGuard
 from docqa.ingestion.sanitizer import compile_patterns
 from docqa.ingestion.worker import IngestionWorker
+from docqa.ports.embedder import DenseEmbedder
 from docqa.ports.health import HealthProbe
 from docqa.ports.repository import DocumentRepository
+from docqa.ports.reranker import Reranker
+from docqa.retrieval.hybrid_retriever import HybridRetriever
 from docqa.services.document_service import DocumentService
 from docqa.services.ingestion_service import IngestionService
 from docqa.settings import Settings
@@ -36,6 +40,7 @@ class Container:
     mongo: MongoConnection
     repository: DocumentRepository
     health: HealthProbe
+    embedder: DenseEmbedder
     store: MongoVectorStore
     ingestion: IngestionService
     worker: IngestionWorker
@@ -66,14 +71,16 @@ def build_container(settings: Settings) -> Container:
     store = MongoVectorStore(
         mongo.db,
         settings.mongodb,
+        settings.retrieval,
         settings.chunks_collection,
         settings.embedding.dense_model,
         list(settings.search_indexes.values()),
     )
+    embedder = FastEmbedDenseEmbedder(settings.embedding)
     ingestion = IngestionService(
         repository,
         store,
-        FastEmbedDenseEmbedder(settings.embedding),
+        embedder,
         settings.chunking,
         compile_patterns(settings.ingestion.injection_patterns),
         settings.mongodb.sync_timeout_s,
@@ -97,10 +104,28 @@ def build_container(settings: Settings) -> Container:
         mongo=mongo,
         repository=repository,
         health=MongoHealthProbe(mongo, settings.chunks_collection, index_names),
+        embedder=embedder,
         store=store,
         ingestion=ingestion,
         worker=worker,
         documents=documents,
+    )
+
+
+@dataclass
+class QueryStack:
+    """The objects that answer a question (the query service arrives in prompt 7)."""
+
+    retriever: HybridRetriever
+    reranker: Reranker
+
+
+def build_query_stack(settings: Settings, container: Container) -> QueryStack:
+    """Build retrieval and re-ranking on top of the container's store and embedder."""
+    retrieval = settings.retrieval
+    return QueryStack(
+        retriever=HybridRetriever(container.embedder, container.store, retrieval.fused_k),
+        reranker=FastEmbedReranker(retrieval.rerank_model, retrieval.rerank_max_tokens),
     )
 
 

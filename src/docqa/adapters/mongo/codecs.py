@@ -14,7 +14,14 @@ from typing import Any
 from bson.binary import Binary, BinaryVectorDtype
 from pydantic import BaseModel
 
-from docqa.domain.models import Chunk, DocumentRecord, EmbeddedChunk, Feedback, Turn
+from docqa.domain.models import (
+    Chunk,
+    DocumentRecord,
+    EmbeddedChunk,
+    Feedback,
+    RetrievedChunk,
+    Turn,
+)
 
 Document = dict[str, Any]
 
@@ -67,12 +74,28 @@ def chunk_to_bson(item: EmbeddedChunk) -> Document:
     return doc
 
 
+# Fields on a chunk document (or search result) that are not part of the Chunk model.
+NON_CHUNK_FIELDS = ("embedding", "embed_model", "fusion", "score")
+
+
 def chunk_from_bson(doc: Document) -> Chunk:
-    """Decode a chunk document; the vector and model name are ignored if present."""
+    """Decode a chunk document; vectors and search metadata are ignored if present."""
     fields = _from_bson(doc)
-    fields.pop("embedding", None)
-    fields.pop("embed_model", None)
+    for name in NON_CHUNK_FIELDS:
+        fields.pop(name, None)
     return Chunk.model_validate(fields)
+
+
+def retrieved_from_bson(
+    doc: Document, fused_score: float, vector_rank: int | None, text_rank: int | None
+) -> RetrievedChunk:
+    """Decode a search result with its fusion score and branch ranks."""
+    return RetrievedChunk(
+        chunk=chunk_from_bson(doc),
+        fused_score=fused_score,
+        vector_rank=vector_rank,
+        text_rank=text_rank,
+    )
 
 
 def embedded_chunk_from_bson(doc: Document) -> EmbeddedChunk:

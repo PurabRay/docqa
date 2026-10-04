@@ -53,7 +53,7 @@ def chunk_pages(
     flagged_pages = {page.number for page in pages if page.flagged_injection}
     chunks = []
     for index, group in enumerate(pack(to_units(pages, cfg.max_tokens, count), cfg, count)):
-        text = join(group)
+        text, offsets = join_with_pages(group)
         chunks.append(
             Chunk(
                 id=chunk_id(doc_id, index),
@@ -66,6 +66,7 @@ def chunk_pages(
                 section=group[0].section,
                 content_hash=hashlib.sha256(text.encode()).hexdigest(),
                 flagged_injection=any(unit.page in flagged_pages for unit in group),
+                page_offsets=offsets,
             )
         )
     return chunks
@@ -111,11 +112,18 @@ def pack(units: list[Unit], cfg: ChunkingConfig, count: TokenCounter) -> list[li
 
 def join(units: list[Unit]) -> str:
     """Join units: a space inside a paragraph, a blank line between paragraphs."""
-    text = ""
+    return join_with_pages(units)[0]
+
+
+def join_with_pages(units: list[Unit]) -> tuple[str, list[int]]:
+    """Join units and return the text offsets where each new page begins."""
+    text, offsets = "", []
     for previous, unit in zip([None, *units], units, strict=False):
-        separator = "" if previous is None else " " if previous.block == unit.block else "\n\n"
-        text += separator + unit.text
-    return text
+        if previous is not None:
+            text += " " if previous.block == unit.block else "\n\n"
+            offsets += [len(text)] * (unit.page - previous.page)
+        text += unit.text
+    return text, offsets
 
 
 def _kind(paragraph: str) -> Literal["text", "heading", "table"]:
