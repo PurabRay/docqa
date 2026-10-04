@@ -4,12 +4,14 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Response, UploadFile, status
+from fastapi import APIRouter, Depends, Query, Response, UploadFile, status
+from fastapi.responses import FileResponse
 
 from docqa.api.deps import get_container, owner_id
 from docqa.api.schemas import DocumentBody, UploadAccepted
 from docqa.bootstrap import Container
 from docqa.domain.models import DocumentRecord
+from docqa.ingestion.highlights import Highlights
 from docqa.ingestion.validator import BYTES_PER_MB
 
 router = APIRouter(tags=["documents"])
@@ -50,6 +52,25 @@ async def list_documents(owner: OwnerDep, container: ContainerDep) -> list[Docum
 async def get_document(doc_id: str, owner: OwnerDep, container: ContainerDep) -> DocumentBody:
     """One document and its ingestion status."""
     return to_body(await container.documents.get(owner, doc_id))
+
+
+@router.get("/documents/{doc_id}/file")
+async def get_file(doc_id: str, owner: OwnerDep, container: ContainerDep) -> FileResponse:
+    """The owner's PDF, for the UI's viewer."""
+    path = await container.documents.file_path(owner, doc_id)
+    return FileResponse(path, media_type="application/pdf")
+
+
+@router.get("/documents/{doc_id}/highlights", response_model=Highlights)
+async def get_highlights(
+    doc_id: str,
+    owner: OwnerDep,
+    container: ContainerDep,
+    page: Annotated[int, Query(ge=1)],
+    quote: Annotated[str, Query(min_length=1, max_length=300)],
+) -> Highlights:
+    """Rectangles of the quote on that page, so the UI never parses PDFs."""
+    return await container.documents.highlights(owner, doc_id, page, quote)
 
 
 @router.delete("/documents/{doc_id}", status_code=status.HTTP_204_NO_CONTENT)

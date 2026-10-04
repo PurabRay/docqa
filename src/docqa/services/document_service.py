@@ -11,6 +11,7 @@ from docqa.config_schema import LimitsConfig
 from docqa.domain.errors import DocQAError, DocumentNotFoundError, FileTooLargeError
 from docqa.domain.models import DocumentRecord, IngestionStatus, IngestJob, new_id
 from docqa.guardrails.storage_guard import StorageGuard
+from docqa.ingestion.highlights import Highlights, find_quote
 from docqa.ingestion.validator import BYTES_PER_MB, validate_pdf
 from docqa.ports.cache import AnswerCache
 from docqa.ports.repository import DocumentRepository
@@ -86,6 +87,23 @@ class DocumentService:
         await self._cache.purge_document(doc_id)
         await self._repo.set_status(doc_id, IngestionStatus.DELETED)
         (self._upload_dir / f"{doc_id}.pdf").unlink(missing_ok=True)
+
+    async def file_path(self, owner_id: str, doc_id: str) -> Path:
+        """Where the owner's PDF is stored (GET /documents/{id}/file).
+
+        Raises:
+            DocumentNotFoundError: Unknown, deleted, or the file is gone.
+        """
+        doc = await self.get(owner_id, doc_id)
+        path = self._upload_dir / f"{doc_id}.pdf"
+        if doc.status is IngestionStatus.DELETED or not path.is_file():
+            raise DocumentNotFoundError()
+        return path
+
+    async def highlights(self, owner_id: str, doc_id: str, page: int, quote: str) -> Highlights:
+        """Rectangles of ``quote`` on ``page`` (GET /documents/{id}/highlights)."""
+        path = await self.file_path(owner_id, doc_id)
+        return await asyncio.to_thread(find_quote, path, page, quote)
 
     def _save(self, path: Path, data: bytes) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)

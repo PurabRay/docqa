@@ -95,6 +95,12 @@ limits:
 
 cache: {backend: memory, ttl_seconds: 3600}   # "mongo" uses the answer_cache TTL collection
 
+ui:
+  api_url: "http://localhost:8000"  # DOCQA_API_URL overrides it (docker-compose sets it)
+  max_uploads: 10                   # FR-1, enforced in the UI only (decision of 2026-10-04)
+  poll_interval_s: 2                # how often the Documents page refreshes statuses
+  request_timeout_s: 60
+
 alerts:                             # PRD "Monitoring" thresholds, checked by scripts/check_alerts.py
   window_minutes: 10
   p95_latency_s: 4.0

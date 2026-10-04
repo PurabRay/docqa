@@ -37,6 +37,7 @@ class Secrets(BaseSettings):
     langfuse_public_key: SecretStr | None = None
     langfuse_secret_key: SecretStr | None = None
     langfuse_host: SecretStr | None = None
+    docqa_api_url: str | None = None  # not a secret: deployment URL of the API for the UI
 
     def require(self, env_name: str) -> str:
         """Return the secret ``env_name`` (e.g. "MONGODB_URI") or raise ConfigurationError."""
@@ -75,6 +76,10 @@ class Settings(AppConfig):
         """The secret's value, or None if it is not set."""
         value: SecretStr | None = getattr(self.secrets, env_name.lower(), None)
         return value.get_secret_value() if value is not None and value.get_secret_value() else None
+
+    def ui_api_url(self) -> str:
+        """The API base URL for the UI: $DOCQA_API_URL, else ui.api_url."""
+        return self.secrets.docqa_api_url or self.ui.api_url
 
     def retrieval_cfg(self, **overrides: object) -> RetrievalCfg:
         """The vector store's settings; ``overrides`` replace fields (e.g. fusion="app")."""

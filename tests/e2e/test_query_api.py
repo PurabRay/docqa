@@ -28,6 +28,17 @@ BLOCK = re.compile(r"\[BEGIN DOCUMENT id=(\S+) doc=\S+ page=\S+?\]\n(.*?)\n\[END
 REWRITTEN = "What is the refund window for international orders?"
 
 
+class RewriteStub:
+    """Rewrites only the international-orders follow-up; echoes any other question."""
+
+    name = "rewrite-stub"
+
+    async def complete(self, messages, **kwargs):
+        question = messages[-1].content.rsplit("Follow-up question: ", 1)[-1].strip()
+        text = REWRITTEN if "international" in question else question
+        return await StubLLM(text, name=self.name).complete(messages)
+
+
 class CitingStub:
     """Answers from the prompt like a well-behaved model: cites the refund chunk if present."""
 
@@ -51,7 +62,7 @@ async def client(settings, tmp_path_factory, test_database):
     app_settings = settings.model_copy(
         update={"ingestion": settings.ingestion.model_copy(update={"upload_dir": upload_dir})}
     )
-    build = lambda s: build_container(s, answer_llm=CitingStub(), text_llm=StubLLM(REWRITTEN))  # noqa: E731
+    build = lambda s: build_container(s, answer_llm=CitingStub(), text_llm=RewriteStub())  # noqa: E731
     app = create_app(app_settings, build=build)
     async with app.router.lifespan_context(app):
         await init_database(app.state.container)
@@ -102,7 +113,7 @@ async def ask(http, doc, question, session=SESSION):
 
 async def test_query_streams_meta_tokens_citations_done(client, doc_id):
     http, _ = client
-    events = await ask(http, doc_id, "What is the refund window?", session="e2e-first")
+    events = await ask(http, doc_id, "What is the refund window?")
     names = [name for name, _ in events]
     assert names[0] == "meta" and names[-1] == "done" and "token" in names
     citations = dict(events)["citations"]["citations"]
@@ -112,27 +123,23 @@ async def test_query_streams_meta_tokens_citations_done(client, doc_id):
 
 async def test_repeat_query_is_cached(client, doc_id):
     http, _ = client
-    await ask(http, doc_id, "How long is the refund window?", session="e2e-cache")
-    events = await ask(http, doc_id, "How long is the refund window?", session="e2e-cache")
+    await ask(http, doc_id, "How long is the refund window?")
+    events = await ask(http, doc_id, "How long is the refund window?")
     assert dict(events)["done"]["cached"] is True
 
 
 async def test_absent_topic_abstains(client, doc_id):
     http, _ = client
-    events = await ask(
-        http, doc_id, "What is the boiling point of tungsten on Mars?", session="e2e-absent"
-    )
+    events = await ask(http, doc_id, "What is the boiling point of tungsten on Mars?")
     assert "abstain" in [name for name, _ in events]
 
 
 async def test_feedback_is_stored(client, doc_id):
     http, container = client
-    trace_id = dict(await ask(http, doc_id, "What is the refund window?", session="e2e-fb"))[
-        "meta"
-    ]["trace_id"]
+    trace_id = dict(await ask(http, doc_id, "What is the refund window?"))["meta"]["trace_id"]
     response = await http.post(
         "/feedback",
-        json={"trace_id": trace_id, "session_id": "e2e-fb", "rating": -1, "comment": "wrong page"},
+        json={"trace_id": trace_id, "session_id": SESSION, "rating": -1, "comment": "wrong page"},
     )
     assert response.status_code == 204
     stored = await container.mongo.db["feedback"].find_one({"trace_id": trace_id})
@@ -141,8 +148,8 @@ async def test_feedback_is_stored(client, doc_id):
 
 async def test_follow_up_reports_the_rewritten_question(client, doc_id):
     http, _ = client
-    await ask(http, doc_id, "What is the refund window?", session="e2e-follow")
-    events = await ask(http, doc_id, "And for international orders?", session="e2e-follow")
+    await ask(http, doc_id, "What is the refund window?")
+    events = await ask(http, doc_id, "And for international orders?")
     assert dict(events)["meta"]["rewritten_question"] == REWRITTEN
 
 

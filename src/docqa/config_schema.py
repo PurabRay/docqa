@@ -158,6 +158,15 @@ class CacheConfig(Section):
     ttl_seconds: int = Field(ge=1)
 
 
+class UIConfig(Section):
+    """Streamlit UI settings."""
+
+    api_url: str
+    max_uploads: int = Field(ge=1)
+    poll_interval_s: float = Field(gt=0)
+    request_timeout_s: float = Field(gt=0)
+
+
 class AlertsConfig(Section):
     """Alert thresholds from the PRD's monitoring table."""
 
@@ -192,6 +201,7 @@ class AppConfig(Section):
     prompts: PromptsConfig
     limits: LimitsConfig
     cache: CacheConfig
+    ui: UIConfig
     alerts: AlertsConfig
     tracing: TracingConfig
 
