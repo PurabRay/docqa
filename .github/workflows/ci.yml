@@ -40,4 +40,7 @@ jobs:
           path: ~/.cache/fastembed
           key: fastembed-${{ hashFiles('config/base.yaml') }}
       - name: integration tests
-        run: uv run pytest -m integration -s -q   # -s shows ingestion time and bytes per chunk
+        run: uv run pytest -m integration -s -q -rs | tee pytest.log  # -s prints ingestion numbers
+      - name: publish ingestion numbers as annotations
+        if: always()
+        run: grep -E "ready in|bytes per chunk|passed|failed|skipped" pytest.log | sed 's/^/::notice::/' || true
