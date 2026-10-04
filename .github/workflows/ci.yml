@@ -1,0 +1,38 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --frozen
+      - name: lint
+        run: make lint
+      - name: typecheck
+        run: make typecheck
+      - name: unit tests
+        run: make test
+
+  integration:
+    runs-on: ubuntu-latest
+    services:
+      mongodb:
+        image: mongodb/mongodb-atlas-local:latest
+        ports: ["27017:27017"]
+        options: >-
+          --health-cmd "/usr/local/bin/runner healthcheck"
+          --health-interval 5s --health-timeout 5s --health-retries 30
+    env:
+      MONGODB_URI: mongodb://localhost:27017/?directConnection=true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --frozen
+      - name: integration tests
+        run: make test-int

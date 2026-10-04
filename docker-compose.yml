@@ -1,0 +1,47 @@
+services:
+  mongodb:
+    image: mongodb/mongodb-atlas-local:latest   # mongod + mongot: $vectorSearch, $search, $rankFusion
+    ports: ["27017:27017"]
+    volumes:
+      - mongodb-data:/data/db
+      - mongodb-config:/data/configdb
+      - mongot-data:/data/mongot
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/runner", "healthcheck"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+
+  api:
+    build: .
+    env_file: [{path: .env, required: false}]
+    environment:
+      MONGODB_URI: mongodb://mongodb:27017/?directConnection=true
+    ports: ["8000:8000"]
+    depends_on:
+      mongodb: {condition: service_healthy}
+
+  ui:
+    build: .
+    command: ["streamlit", "run", "ui/streamlit_app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+    environment:
+      DOCQA_API_URL: http://api:8000
+    ports: ["8501:8501"]
+    depends_on: [api]
+
+  # Optional: local SLM for "local mode". Start with: docker compose --profile ollama up -d
+  ollama:
+    image: ollama/ollama:latest
+    profiles: [ollama]
+    ports: ["11434:11434"]
+    volumes: [ollama-models:/root/.ollama]
+
+  # Self-hosted Langfuse (a "langfuse" profile: web, worker, Postgres, ClickHouse, Redis,
+  # MinIO) is added with tracing in M4. Until then use Langfuse Cloud Hobby or tracing: noop.
+
+volumes:
+  mongodb-data:
+  mongodb-config:
+  mongot-data:
+  ollama-models:
