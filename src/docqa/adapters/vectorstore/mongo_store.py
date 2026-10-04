@@ -16,7 +16,7 @@ from docqa.adapters.mongo import codecs, indexes
 from docqa.adapters.mongo.client import Document, translate_errors
 from docqa.adapters.mongo.pipelines import text_count_pipeline, vector_count_pipeline
 from docqa.adapters.vectorstore import mongo_search
-from docqa.config_schema import MongoConfig, RetrievalConfig, SearchIndex
+from docqa.config_schema import RetrievalCfg
 from docqa.domain.errors import EmbeddingVersionMismatchError, IndexSyncTimeoutError
 from docqa.domain.models import AccessFilter, EmbeddedChunk, HybridQuery, RetrievedChunk
 
@@ -26,35 +26,25 @@ class MongoVectorStore:
 
     Args:
         db: Handle to the docqa database.
-        cfg: The ``mongodb`` config section.
-        retrieval: The ``retrieval`` config section (fusion mode, k values, weights).
         collection: Name of the chunks collection for the active model.
+        cfg: Indexes, k values, weights, batch size and polling intervals.
         embed_model: The configured embedding model; other models are refused.
-        search_indexes: Definitions for ensure_indexes().
     """
 
     def __init__(
-        self,
-        db: AsyncDatabase[Document],
-        cfg: MongoConfig,
-        retrieval: RetrievalConfig,
-        collection: str,
-        embed_model: str,
-        search_indexes: list[SearchIndex],
+        self, db: AsyncDatabase[Document], collection: str, cfg: RetrievalCfg, embed_model: str
     ) -> None:
         self._chunks = db[collection]
         self._cfg = cfg
-        self._retrieval = retrieval
         self._embed_model = embed_model
-        self._search_indexes = search_indexes
         self._model_checked = False
 
     async def ensure_indexes(self) -> None:
         """Create or update both search indexes and wait until they are READY."""
-        await indexes.ensure_search_indexes(self._chunks, self._search_indexes)
+        await indexes.ensure_search_indexes(self._chunks, self._cfg.search_indexes)
         await indexes.wait_until_ready(
             self._chunks,
-            self._search_indexes,
+            self._cfg.search_indexes,
             self._cfg.index_ready_timeout_s,
             self._cfg.index_poll_interval_s,
         )
@@ -101,7 +91,7 @@ class MongoVectorStore:
     ) -> list[RetrievedChunk]:
         """Hybrid search restricted to ``access``; at most ``limit`` results, best first."""
         await self._check_model()
-        results = await mongo_search.search(self._chunks, query, access, self._retrieval, self._cfg)
+        results = await mongo_search.search(self._chunks, query, access, self._cfg)
         return results[:limit]
 
     async def delete_document(self, doc_id: str, owner_id: str) -> int:

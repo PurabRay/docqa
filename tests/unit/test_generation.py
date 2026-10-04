@@ -5,10 +5,10 @@ import pytest
 from docqa.adapters.llm.stub import StubLLM
 from docqa.domain.errors import AllProvidersUnavailableError, ConfigurationError
 from docqa.domain.models import Chunk, RetrievedChunk, Turn
-from docqa.generation.answer_generator import NO_CITATIONS_WARNING, AnswerGenerator, GeneratedAnswer
+from docqa.generation.answer_generator import NO_CITATIONS_WARNING, AnswerGenerator, Final
 from docqa.generation.citation_validator import validate_citations
 from docqa.generation.json_stream import FieldStreamer
-from docqa.generation.prompt_builder import build_messages
+from docqa.generation.prompt_builder import PromptBuilder
 from docqa.generation.prompt_registry import PromptRegistry
 from docqa.generation.schemas import CitedClaim, LLMAnswer
 from docqa.ingestion.text_split import token_counter
@@ -59,7 +59,7 @@ def test_builder_order_and_markers():
         retrieved("c1", "First {braces} text.", 4, 5),
         retrieved("c2", "Risky.", flagged=True),
     ]
-    system, user = build_messages(PROMPTS.get("answer", "v1"), chunks, "What?", 6000, COUNT)
+    system, user = PromptBuilder(6000, COUNT).build(PROMPTS.get("answer", "v1"), chunks, "What?")
     assert system.role == "system" and system.content == PROMPTS.get("answer", "v1").system
     assert (
         "[BEGIN DOCUMENT id=c1 doc=report.pdf page=4-5]\nFirst {braces} text.\n[END DOCUMENT]"
@@ -76,7 +76,7 @@ def test_builder_order_and_markers():
 
 def test_builder_drops_lowest_ranked_chunks_to_fit_the_token_cap():
     chunks = [retrieved(f"c{i}", "word " * 200) for i in range(5)]
-    _, user = build_messages(PROMPTS.get("answer", "v1"), chunks, "Q?", 700, COUNT)
+    _, user = PromptBuilder(700, COUNT).build(PROMPTS.get("answer", "v1"), chunks, "Q?")
     assert "id=c0" in user.content and "id=c1" in user.content and "id=c4" not in user.content
     assert COUNT(user.content) <= 700
 
@@ -105,9 +105,7 @@ async def generate(reply):
     events = [e async for e in AnswerGenerator(StubLLM(reply, piece_size=5), 600).generate([])]
     tokens = "".join(e.text for e in events[:-1])
     final = events[-1]
-    assert isinstance(final, GeneratedAnswer) and all(
-        not isinstance(e, GeneratedAnswer) for e in events[:-1]
-    )
+    assert isinstance(final, Final) and all(not isinstance(e, Final) for e in events[:-1])
     return tokens, final
 
 
@@ -123,7 +121,7 @@ async def test_structured_json_streams_only_answer_text():
     assert (
         tokens == "30 days."
         and final.style == "structured"
-        and final.answer.citations[0].chunk_id == "c1"
+        and final.parsed.citations[0].chunk_id == "c1"
     )
     assert final.provider == "stub"
 
@@ -138,7 +136,7 @@ async def test_plain_text_gets_no_citations_and_a_warning():
     assert tokens == "The window is 30 days [c1]."
     assert (
         final.style == "plain"
-        and final.answer.citations == []
+        and final.parsed.citations == []
         and final.warning == NO_CITATIONS_WARNING
     )
 

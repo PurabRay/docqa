@@ -1,6 +1,7 @@
 """Domain models (docs/DESIGN.md, "Domain models"). No MongoDB, HTTP or vendor code here.
 
-Query events are added when the query service lands (M3, prompt 7).
+The QueryEvent union at the bottom is what QueryService streams; each ``type`` is the
+SSE event name from docs/DESIGN.md.
 """
 
 from __future__ import annotations
@@ -8,7 +9,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -102,14 +103,12 @@ class Citation(BaseModel):
 
 
 class Answer(BaseModel):
-    """A validated answer and its surviving citations."""
+    """A final answer with its verified citations (docs/DESIGN.md)."""
 
     text: str
     citations: list[Citation]
-    dropped_citations: int = 0
-    verified: bool  # False when no citation survived validation
     abstained: bool = False
-    provider: str
+    provider: str  # which model actually answered
     prompt_version: str
 
 
@@ -188,3 +187,79 @@ class HybridQuery(BaseModel):
 
     text: str = Field(min_length=1)
     vector: list[float] = Field(min_length=1)
+
+
+class QueryRequest(BaseModel):
+    """A question about some of the owner's documents."""
+
+    owner_id: str = Field(min_length=1)
+    session_id: str = Field(min_length=1)
+    question: str = Field(min_length=1)
+    doc_ids: list[str] = Field(min_length=1)
+
+
+# ---------------------------------------------------------------- query events
+
+
+class Meta(BaseModel):
+    """First event: the trace id and, for follow-ups, the rewritten question."""
+
+    type: Literal["meta"] = "meta"
+    trace_id: str
+    rewritten_question: str | None = None
+
+
+class Token(BaseModel):
+    """One streamed piece of the answer."""
+
+    type: Literal["token"] = "token"
+    text: str
+
+
+class Citations(BaseModel):
+    """Citations that survived validation, and how many were dropped."""
+
+    type: Literal["citations"] = "citations"
+    citations: list[Citation]
+    dropped: int = 0
+
+
+class Abstained(BaseModel):
+    """Sent instead of tokens when the documents do not answer the question."""
+
+    type: Literal["abstain"] = "abstain"
+    reason: Literal["low_relevance", "insufficient_context"]
+
+
+class Degraded(BaseModel):
+    """Passages-only fallback when every LLM provider is unavailable."""
+
+    type: Literal["degraded"] = "degraded"
+    reason: Literal["all_providers_unavailable"] = "all_providers_unavailable"
+    passages: list[RetrievedChunk]
+
+
+class Error(BaseModel):
+    """An unrecoverable error, reported in-stream."""
+
+    type: Literal["error"] = "error"
+    code: str
+    message: str
+
+
+class Completed(BaseModel):
+    """Last event ("done"): the answer, who gave it, how long it took, token counts."""
+
+    type: Literal["done"] = "done"
+    answer: Answer | None = None
+    provider: str | None = None
+    latency_ms: int = 0
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cached: bool = False
+
+
+QueryEvent = Annotated[
+    Meta | Token | Citations | Abstained | Degraded | Error | Completed,
+    Field(discriminator="type"),
+]

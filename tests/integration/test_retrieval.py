@@ -15,7 +15,6 @@ from docqa.bootstrap import build_container, build_query_stack, init_database
 from docqa.domain.models import AccessFilter, IngestionStatus
 from docqa.generation.answer_generator import AnswerGenerator
 from docqa.generation.citation_validator import validate_citations
-from docqa.generation.prompt_builder import build_messages
 from docqa.retrieval.hybrid_retriever import HybridRetriever
 from tests.fixtures.make_fixtures import KNOWN_SENTENCES
 
@@ -48,11 +47,9 @@ def retriever(container, fusion: str) -> HybridRetriever:
     settings = container.settings
     store = MongoVectorStore(
         container.mongo.db,
-        settings.mongodb,
-        settings.retrieval.model_copy(update={"fusion": fusion}),
         settings.chunks_collection,
+        settings.retrieval_cfg(fusion=fusion),
         settings.embedding.dense_model,
-        list(settings.search_indexes.values()),
     )
     return HybridRetriever(container.embedder, store, settings.retrieval.fused_k)
 
@@ -114,7 +111,7 @@ async def test_answer_flow_cites_the_correct_page(ingested):
     top = await asyncio.to_thread(
         stack.reranker.rerank, question, candidates, settings.retrieval.top_k
     )
-    messages = build_messages(stack.answer_prompt, top, question, 6000, stack.count_tokens)
+    messages = stack.prompt_builder.build(stack.answer_prompt, top, question)
     refund = next(c for c in top if REFUND in c.chunk.text)
     assert f"id={refund.chunk.id}" in messages[1].content
 
@@ -129,6 +126,6 @@ async def test_answer_flow_cites_the_correct_page(ingested):
         }
     )
     events = [e async for e in AnswerGenerator(StubLLM(reply), 600).generate(messages)]
-    validated = validate_citations(events[-1].answer, top)
+    validated = validate_citations(events[-1].parsed, top)
     assert validated.verified and validated.dropped == 1
     assert [(c.doc_name, c.page) for c in validated.citations] == [("text.pdf", 3)]

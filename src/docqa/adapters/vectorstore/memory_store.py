@@ -14,7 +14,7 @@ from collections.abc import Sequence
 from rank_bm25 import BM25Okapi
 
 from docqa.adapters.mongo.pipelines import vector_filter
-from docqa.config_schema import RetrievalConfig
+from docqa.config_schema import RetrievalCfg
 from docqa.domain.models import AccessFilter, EmbeddedChunk, HybridQuery, RetrievedChunk
 from docqa.retrieval.rrf import rrf_fuse
 
@@ -36,8 +36,8 @@ def tokenize(text: str) -> list[str]:
 class MemoryVectorStore:
     """Implements the VectorStore port in memory."""
 
-    def __init__(self, retrieval: RetrievalConfig) -> None:
-        self._cfg = retrieval
+    def __init__(self, cfg: RetrievalCfg) -> None:
+        self._cfg = cfg
         self._chunks: dict[str, EmbeddedChunk] = {}
 
     async def ensure_indexes(self) -> None:
@@ -68,7 +68,7 @@ class MemoryVectorStore:
                 "vector": self._vector_ranking(query, allowed),
                 "text": self._text_ranking(query, allowed),
             },
-            weights={"vector": self._cfg.weights.vector, "text": self._cfg.weights.text},
+            weights={"vector": self._cfg.w_vector, "text": self._cfg.w_text},
         )
         return [
             RetrievedChunk(

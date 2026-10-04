@@ -28,7 +28,7 @@ COMPLETION = {
 def client(name, handler):
     transport = httpx2.MockTransport(handler)
     return OpenAICompatibleLLM(
-        name, PROVIDERS[name], "key", httpx2.AsyncClient(transport=transport)
+        name, PROVIDERS[name], "key", http_client=httpx2.AsyncClient(transport=transport)
     )
 
 
@@ -135,3 +135,19 @@ async def test_stream_yields_text_then_a_final_usage_record():
     assert [d.text for d in deltas] == ["Hel", "lo", ""]
     assert deltas[-1].done and (deltas[-1].input_tokens, deltas[-1].output_tokens) == (5, 2)
     assert seen[0]["stream"] is True and seen[0]["stream_options"] == {"include_usage": True}
+
+
+async def test_stream_uses_the_schema_given_at_construction():
+    seen = []
+    response = httpx2.Response(
+        200, content=sse(chunk("{}")), headers={"content-type": "text/event-stream"}
+    )
+    llm = OpenAICompatibleLLM(
+        "gemini_flash",
+        PROVIDERS["gemini_flash"],
+        "key",
+        response_schema=LLMAnswer,
+        http_client=httpx2.AsyncClient(transport=httpx2.MockTransport(recording(seen, response))),
+    )
+    [d async for d in llm.stream(MESSAGES)]
+    assert seen[0]["response_format"]["json_schema"]["name"] == "LLMAnswer"

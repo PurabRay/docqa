@@ -51,20 +51,18 @@ def make_chunks(owner, doc_id, count, vector, text, embed_model) -> list[Embedde
 
 @pytest.fixture(params=STORES)
 async def store(request, settings):
-    retrieval = settings.retrieval
+    cfg = settings.retrieval_cfg()
     if request.param == "memory":
-        yield MemoryVectorStore(retrieval)
+        yield MemoryVectorStore(cfg)
         return
     request.getfixturevalue("test_database")  # sync fixture: drops the database afterwards
     container = build_container(settings)
     await init_database(container)
     yield MongoVectorStore(
         container.mongo.db,
-        settings.mongodb,
-        retrieval.model_copy(update={"fusion": request.param}),
         settings.chunks_collection,
+        settings.retrieval_cfg(fusion=request.param),
         settings.embedding.dense_model,
-        list(settings.search_indexes.values()),
     )
     await container.close()
 

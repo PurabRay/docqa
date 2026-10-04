@@ -46,6 +46,7 @@ class OpenAICompatibleLLM:
         name: Provider name from config (e.g. "gemini_flash").
         cfg: The provider's config entry.
         api_key: Its API key, or None for keyless providers (Ollama).
+        response_schema: JSON schema that stream() asks for (e.g. LLMAnswer); None = text.
         http_client: Optional httpx2 client; tests pass one with a MockTransport.
     """
 
@@ -54,10 +55,12 @@ class OpenAICompatibleLLM:
         name: str,
         cfg: ProviderConfig,
         api_key: str | None,
+        response_schema: type[BaseModel] | None = None,
         http_client: httpx2.AsyncClient | None = None,
     ) -> None:
         self.name = name
         self._cfg = cfg
+        self._response_schema = response_schema
         self._client = AsyncOpenAI(
             base_url=cfg.base_url,
             api_key=api_key or "not-needed",
@@ -87,14 +90,10 @@ class OpenAICompatibleLLM:
         )
 
     async def stream(
-        self,
-        messages: list[Message],
-        *,
-        json_schema: type[BaseModel] | None = None,
-        max_tokens: int = 512,
+        self, messages: list[Message], *, max_tokens: int = 512
     ) -> AsyncIterator[LLMDelta]:
-        """Stream text deltas, then a final delta carrying token usage."""
-        request = self.request(messages, json_schema, max_tokens, 0.0)
+        """Stream text deltas (in the construction-time schema), then a usage record."""
+        request = self.request(messages, self._response_schema, max_tokens, 0.0)
         request.update(stream=True, stream_options={"include_usage": True})
         input_tokens = output_tokens = 0
         with translate_errors(self.name):

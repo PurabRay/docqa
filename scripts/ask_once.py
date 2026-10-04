@@ -19,10 +19,9 @@ from pathlib import Path
 from docqa.api.deps import owner_id
 from docqa.bootstrap import Container, build_container, build_query_stack, init_database
 from docqa.domain.errors import DocQAError
-from docqa.domain.models import AccessFilter, IngestionStatus, RetrievedChunk
-from docqa.generation.answer_generator import GeneratedAnswer, GeneratedToken
+from docqa.domain.models import AccessFilter, IngestionStatus, RetrievedChunk, Token
+from docqa.generation.answer_generator import Final
 from docqa.generation.citation_validator import validate_citations
-from docqa.generation.prompt_builder import build_messages
 from docqa.retrieval.abstention import best_score, should_abstain
 from docqa.settings import load_settings
 
@@ -63,17 +62,11 @@ async def ask(question: str, session_id: str, pdf: Path | None) -> int:
         if should_abstain(top, settings.retrieval.abstain_threshold):
             print("ABSTAIN: I couldn't find this in your documents.")
             return 0
-        messages = build_messages(
-            stack.answer_prompt,
-            top,
-            question,
-            settings.limits.max_context_tokens,
-            stack.count_tokens,
-        )
+        messages = stack.prompt_builder.build(stack.answer_prompt, top, question)
         async for event in stack.generator.generate(messages):
-            if isinstance(event, GeneratedToken):
+            if isinstance(event, Token):
                 print(event.text, end="", flush=True)
-            elif isinstance(event, GeneratedAnswer):
+            elif isinstance(event, Final):
                 print_result(event, top)
         return 0
     except DocQAError as err:
@@ -83,9 +76,9 @@ async def ask(question: str, session_id: str, pdf: Path | None) -> int:
         await container.close()
 
 
-def print_result(event: GeneratedAnswer, top: list[RetrievedChunk]) -> None:
+def print_result(event: Final, top: list[RetrievedChunk]) -> None:
     """Print provider, parse style and the citations that survived validation."""
-    validated = validate_citations(event.answer, top)
+    validated = validate_citations(event.parsed, top)
     print(f"\n\nprovider={event.provider} style={event.style}")
     print(f"sufficient_context={validated.sufficient_context}")
     if event.warning:

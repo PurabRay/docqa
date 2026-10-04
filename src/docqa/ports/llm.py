@@ -50,12 +50,9 @@ class LLMClient(Protocol):
         """Return the full reply, constrained to ``json_schema`` when given."""
         ...
 
-    def stream(
-        self,
-        messages: list[Message],
-        *,
-        json_schema: type[BaseModel] | None = None,
-        max_tokens: int = 512,
-    ) -> AsyncIterator[LLMDelta]:
-        """Yield the reply piece by piece, then one final delta with done=True."""
+    def stream(self, messages: list[Message], *, max_tokens: int = 512) -> AsyncIterator[LLMDelta]:
+        """Yield the reply piece by piece, then one final delta with done=True.
+
+        Structured output for streams is set when the client is built (B1).
+        """
         ...

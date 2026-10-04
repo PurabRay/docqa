@@ -54,13 +54,9 @@ def tiny_chunks(settings: Settings) -> list[EmbeddedChunk]:
 
 async def run(settings: Settings, mongo: MongoConnection) -> int:
     """Write, search as owner A, report."""
+    cfg = settings.retrieval_cfg()
     store = MongoVectorStore(
-        mongo.db,
-        settings.mongodb,
-        settings.retrieval,
-        settings.chunks_collection,
-        settings.embedding.dense_model,
-        list(settings.search_indexes.values()),
+        mongo.db, settings.chunks_collection, cfg, settings.embedding.dense_model
     )
     await store.upsert(tiny_chunks(settings))
     for owner, texts in OWNERS.items():
@@ -70,14 +66,7 @@ async def run(settings: Settings, mongo: MongoConnection) -> int:
     access = AccessFilter(
         owner_id="smoke-owner-a", doc_ids=["doc-smoke-owner-a", "doc-smoke-owner-b"]
     )
-    pipeline = hybrid_pipeline(
-        query_vector,
-        "refund window",
-        access,
-        settings.retrieval,
-        vector_index=settings.mongodb.vector_index,
-        text_index=settings.mongodb.text_index,
-    )
+    pipeline = hybrid_pipeline(query_vector, "refund window", access, cfg)
     try:
         docs = await (await mongo.db[settings.chunks_collection].aggregate(pipeline)).to_list()
     except OperationFailure as err:

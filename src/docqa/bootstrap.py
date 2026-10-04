@@ -12,6 +12,8 @@ import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from pydantic import BaseModel
+
 from docqa.adapters.embedding.fastembed_dense import FastEmbedDenseEmbedder
 from docqa.adapters.llm.circuit_breaker import CircuitBreaker
 from docqa.adapters.llm.openai_compatible import OpenAICompatibleLLM
@@ -24,10 +26,12 @@ from docqa.adapters.rerank.cross_encoder import FastEmbedReranker
 from docqa.adapters.storage.mongo_repository import MongoDocumentRepository
 from docqa.adapters.vectorstore.mongo_store import MongoVectorStore
 from docqa.generation.answer_generator import AnswerGenerator
+from docqa.generation.prompt_builder import PromptBuilder
 from docqa.generation.prompt_registry import PromptRegistry, PromptTemplate
+from docqa.generation.schemas import LLMAnswer
 from docqa.guardrails.storage_guard import StorageGuard
 from docqa.ingestion.sanitizer import compile_patterns
-from docqa.ingestion.text_split import TokenCounter, token_counter
+from docqa.ingestion.text_split import token_counter
 from docqa.ingestion.worker import IngestionWorker
 from docqa.ports.embedder import DenseEmbedder
 from docqa.ports.health import HealthProbe
@@ -81,11 +85,9 @@ def build_container(settings: Settings) -> Container:
     repository = MongoDocumentRepository(mongo.db)
     store = MongoVectorStore(
         mongo.db,
-        settings.mongodb,
-        settings.retrieval,
         settings.chunks_collection,
+        settings.retrieval_cfg(),
         settings.embedding.dense_model,
-        list(settings.search_indexes.values()),
     )
     embedder = FastEmbedDenseEmbedder(settings.embedding)
     ingestion = IngestionService(
@@ -133,11 +135,27 @@ class QueryStack:
     generator: AnswerGenerator
     rewriter: QueryRewriter
     answer_prompt: PromptTemplate
-    count_tokens: TokenCounter
+    prompt_builder: PromptBuilder
 
 
-def build_llm_router(settings: Settings) -> FallbackLLMRouter:
-    """One client per provider in llm.router order; providers missing their key are left out."""
+def build_breakers(settings: Settings) -> dict[str, CircuitBreaker]:
+    """One breaker per configured provider, shared by every router."""
+    cb = settings.llm.circuit_breaker
+    return {
+        name: CircuitBreaker(name, cb.failures_to_open, cb.open_seconds)
+        for name in settings.llm.router
+    }
+
+
+def build_llm_router(
+    settings: Settings,
+    breakers: dict[str, CircuitBreaker],
+    response_schema: type[BaseModel] | None = None,
+) -> FallbackLLMRouter:
+    """One client per provider in llm.router order; providers missing their key are left out.
+
+    ``response_schema`` is what streamed replies must follow (LLMAnswer for answers).
+    """
     llm, clients = settings.llm, []
     for name in llm.router:
         provider = llm.providers[name]
@@ -147,11 +165,7 @@ def build_llm_router(settings: Settings) -> FallbackLLMRouter:
                 "llm.provider_skipped name=%s reason=%s not set", name, provider.api_key_env
             )
             continue
-        clients.append(OpenAICompatibleLLM(name, provider, key))
-    cb = llm.circuit_breaker
-    breakers = {
-        c.name: CircuitBreaker(c.name, cb.failures_to_open, cb.open_seconds) for c in clients
-    }
+        clients.append(OpenAICompatibleLLM(name, provider, key, response_schema))
     return FallbackLLMRouter(clients, breakers, llm.retry_on_minute_429, llm.retry_wait_s)
 
 
@@ -159,17 +173,20 @@ def build_query_stack(settings: Settings, container: Container) -> QueryStack:
     """Build retrieval, re-ranking and generation on top of the container."""
     retrieval, generation = settings.retrieval, settings.generation
     prompts = PromptRegistry(settings.prompts_dir)
-    llm = build_llm_router(settings)
+    breakers = build_breakers(settings)
+    answer_llm = build_llm_router(settings, breakers, response_schema=LLMAnswer)
+    text_llm = build_llm_router(settings, breakers)
+    rewrite_prompt = prompts.get("rewrite", settings.prompts.rewrite)
     return QueryStack(
         retriever=HybridRetriever(container.embedder, container.store, retrieval.fused_k),
         reranker=FastEmbedReranker(retrieval.rerank_model, retrieval.rerank_max_tokens),
-        llm=llm,
-        generator=AnswerGenerator(llm, generation.max_answer_tokens),
-        rewriter=QueryRewriter(
-            llm, prompts.get("rewrite", settings.prompts.rewrite), generation.max_rewrite_tokens
-        ),
+        llm=answer_llm,
+        generator=AnswerGenerator(answer_llm, generation.max_answer_tokens),
+        rewriter=QueryRewriter(text_llm, rewrite_prompt, generation.max_rewrite_tokens),
         answer_prompt=prompts.get("answer", settings.prompts.answer),
-        count_tokens=token_counter(settings.chunking.tokenizer),
+        prompt_builder=PromptBuilder(
+            settings.limits.max_context_tokens, token_counter(settings.chunking.tokenizer)
+        ),
     )
 
 

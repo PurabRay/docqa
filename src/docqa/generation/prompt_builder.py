@@ -26,22 +26,25 @@ def document_block(item: RetrievedChunk) -> str:
     return f"{header}\n{chunk.text}\n[END DOCUMENT]"
 
 
-def build_messages(
-    template: PromptTemplate,
-    chunks: list[RetrievedChunk],
-    question: str,
-    max_context_tokens: int,
-    count: TokenCounter,
-) -> list[Message]:
-    """System + user messages, keeping as many top-ranked chunks as fit the budget."""
-    kept = list(chunks)
-    while True:
-        documents = "\n\n".join(document_block(c) for c in kept)
-        # replace(), not format(): document text may contain braces.
-        user = template.user.replace("{documents}", documents).replace("{question}", question)
-        if not kept or count(template.system) + count(user) <= max_context_tokens:
-            return [
-                Message(role="system", content=template.system),
-                Message(role="user", content=user),
-            ]
-        kept.pop()  # drop the lowest-ranked chunk
+class PromptBuilder:
+    """Builds answer prompts within a token budget (limits.max_context_tokens)."""
+
+    def __init__(self, max_context_tokens: int, count: TokenCounter) -> None:
+        self._max_tokens = max_context_tokens
+        self._count = count
+
+    def build(
+        self, template: PromptTemplate, chunks: list[RetrievedChunk], question: str
+    ) -> list[Message]:
+        """System + user messages, keeping as many top-ranked chunks as fit the budget."""
+        kept = list(chunks)
+        while True:
+            documents = "\n\n".join(document_block(c) for c in kept)
+            # replace(), not format(): document text may contain braces.
+            user = template.user.replace("{documents}", documents).replace("{question}", question)
+            if not kept or self._count(template.system) + self._count(user) <= self._max_tokens:
+                return [
+                    Message(role="system", content=template.system),
+                    Message(role="user", content=user),
+                ]
+            kept.pop()  # drop the lowest-ranked chunk

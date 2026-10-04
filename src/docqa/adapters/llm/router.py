@@ -76,16 +76,12 @@ class FallbackLLMRouter:
         raise AllProvidersUnavailableError()
 
     async def stream(
-        self,
-        messages: list[Message],
-        *,
-        json_schema: type[BaseModel] | None = None,
-        max_tokens: int = 512,
+        self, messages: list[Message], *, max_tokens: int = 512
     ) -> AsyncIterator[LLMDelta]:
         """Stream from the first provider that produces a first delta."""
         for client in self._healthy():
             try:
-                opener = partial(self._open, client, messages, json_schema, max_tokens)
+                opener = partial(self._open, client, messages, max_tokens)
                 stream, first = await self._with_retry(opener)
             except FALLBACK_ERRORS as err:
                 self._breakers[client.name].record_failure(err)
@@ -101,14 +97,10 @@ class FallbackLLMRouter:
         return [c for c in self._clients if not self._breakers[c.name].is_open()]
 
     async def _open(
-        self,
-        client: LLMClient,
-        messages: list[Message],
-        json_schema: type[BaseModel] | None,
-        max_tokens: int,
+        self, client: LLMClient, messages: list[Message], max_tokens: int
     ) -> tuple[AsyncIterator[LLMDelta], LLMDelta]:
         """Start a stream and wait for its first delta (where most failures show up)."""
-        stream = client.stream(messages, json_schema=json_schema, max_tokens=max_tokens)
+        stream = client.stream(messages, max_tokens=max_tokens)
         return stream, await anext(stream)
 
     async def _with_retry(self, call: Callable[[], Awaitable[T]]) -> T:

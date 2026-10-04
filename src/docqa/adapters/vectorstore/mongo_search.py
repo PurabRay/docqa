@@ -23,7 +23,7 @@ from docqa.adapters.mongo.pipelines import (
     text_only_pipeline,
     vector_only_pipeline,
 )
-from docqa.config_schema import MongoConfig, RetrievalConfig
+from docqa.config_schema import RetrievalCfg
 from docqa.domain.errors import ConfigurationError
 from docqa.domain.models import AccessFilter, HybridQuery, RetrievedChunk
 from docqa.retrieval.rrf import rrf_fuse
@@ -32,40 +32,23 @@ log = logging.getLogger(__name__)
 
 
 async def search(
-    chunks: AsyncCollection[Document],
-    query: HybridQuery,
-    access: AccessFilter,
-    retrieval: RetrievalConfig,
-    mongo: MongoConfig,
+    chunks: AsyncCollection[Document], query: HybridQuery, access: AccessFilter, cfg: RetrievalCfg
 ) -> list[RetrievedChunk]:
     """Run hybrid search in the configured fusion mode, best first."""
     start = time.perf_counter()
-    if retrieval.fusion == "server":
-        results = await _server(chunks, query, access, retrieval, mongo)
+    if cfg.fusion == "server":
+        results = await _server(chunks, query, access, cfg)
     else:
-        results = await _app(chunks, query, access, retrieval, mongo)
+        results = await _app(chunks, query, access, cfg)
     db_ms = (time.perf_counter() - start) * 1000
-    log.info(
-        "retrieval.done fusion=%s candidates=%d db_ms=%d", retrieval.fusion, len(results), db_ms
-    )
+    log.info("retrieval.done fusion=%s candidates=%d db_ms=%d", cfg.fusion, len(results), db_ms)
     return results
 
 
 async def _server(
-    chunks: AsyncCollection[Document],
-    query: HybridQuery,
-    access: AccessFilter,
-    retrieval: RetrievalConfig,
-    mongo: MongoConfig,
+    chunks: AsyncCollection[Document], query: HybridQuery, access: AccessFilter, cfg: RetrievalCfg
 ) -> list[RetrievedChunk]:
-    pipeline = hybrid_pipeline(
-        query.vector,
-        query.text,
-        access,
-        retrieval,
-        vector_index=mongo.vector_index,
-        text_index=mongo.text_index,
-    )
+    pipeline = hybrid_pipeline(query.vector, query.text, access, cfg)
     try:
         docs = await _aggregate(chunks, pipeline)
     except OperationFailure as err:
@@ -76,31 +59,22 @@ async def _server(
 
 
 async def _app(
-    chunks: AsyncCollection[Document],
-    query: HybridQuery,
-    access: AccessFilter,
-    retrieval: RetrievalConfig,
-    mongo: MongoConfig,
+    chunks: AsyncCollection[Document], query: HybridQuery, access: AccessFilter, cfg: RetrievalCfg
 ) -> list[RetrievedChunk]:
     vector_docs, text_docs = await asyncio.gather(
-        _aggregate(
-            chunks,
-            vector_only_pipeline(query.vector, access, retrieval, vector_index=mongo.vector_index),
-        ),
-        _aggregate(
-            chunks, text_only_pipeline(query.text, access, retrieval, text_index=mongo.text_index)
-        ),
+        _aggregate(chunks, vector_only_pipeline(query.vector, access, cfg)),
+        _aggregate(chunks, text_only_pipeline(query.text, access, cfg)),
     )
     by_id = {doc["_id"]: doc for doc in [*vector_docs, *text_docs]}
     fused = rrf_fuse(
         {"vector": [d["_id"] for d in vector_docs], "text": [d["_id"] for d in text_docs]},
-        weights={"vector": retrieval.weights.vector, "text": retrieval.weights.text},
+        weights={"vector": cfg.w_vector, "text": cfg.w_text},
     )
     return [
         codecs.retrieved_from_bson(
             by_id[item.id], item.score, item.ranks.get("vector"), item.ranks.get("text")
         )
-        for item in fused[: retrieval.fused_k]
+        for item in fused[: cfg.fused_k]
     ]
 
 

@@ -16,7 +16,7 @@ import yaml
 from pydantic import SecretStr, ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from docqa.config_schema import AppConfig, BTreeIndex, SearchIndex
+from docqa.config_schema import AppConfig, BTreeIndex, RetrievalCfg, SearchIndex
 from docqa.domain.errors import ConfigurationError
 
 DEFAULT_PROFILE = "free"
@@ -75,6 +75,27 @@ class Settings(AppConfig):
         """The secret's value, or None if it is not set."""
         value: SecretStr | None = getattr(self.secrets, env_name.lower(), None)
         return value.get_secret_value() if value is not None and value.get_secret_value() else None
+
+    def retrieval_cfg(self, **overrides: object) -> RetrievalCfg:
+        """The vector store's settings; ``overrides`` replace fields (e.g. fusion="app")."""
+        r, m = self.retrieval, self.mongodb
+        values: dict[str, object] = {
+            "fusion": r.fusion,
+            "vector_index": m.vector_index,
+            "text_index": m.text_index,
+            "num_candidates": r.num_candidates,
+            "vector_k": r.vector_k,
+            "text_k": r.text_k,
+            "fused_k": r.fused_k,
+            "w_vector": r.weights.vector,
+            "w_text": r.weights.text,
+            "bulk_batch": m.bulk_batch,
+            "sync_poll_interval_s": m.sync_poll_interval_s,
+            "index_ready_timeout_s": m.index_ready_timeout_s,
+            "index_poll_interval_s": m.index_poll_interval_s,
+            "search_indexes": list(self.search_indexes.values()),
+        }
+        return RetrievalCfg.model_validate(values | overrides)
 
     def mongodb_uri(self) -> str:
         """Return the MongoDB connection string. Never log it: it carries credentials."""

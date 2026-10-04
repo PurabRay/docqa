@@ -12,6 +12,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ValidationError
 
+from docqa.domain.models import Token
 from docqa.generation.json_stream import FieldStreamer
 from docqa.generation.schemas import LLMAnswer
 from docqa.ports.llm import LLMClient, Message
@@ -23,16 +24,10 @@ MAX_ANSWER_CHARS = 1200  # same cap as LLMAnswer.answer
 ParseStyle = Literal["structured", "fenced", "plain"]
 
 
-class GeneratedToken(BaseModel):
-    """A piece of answer text, ready to show."""
+class Final(BaseModel):
+    """The parsed reply, sent once after the last Token."""
 
-    text: str
-
-
-class GeneratedAnswer(BaseModel):
-    """The parsed reply, sent once after the last token."""
-
-    answer: LLMAnswer
+    parsed: LLMAnswer
     style: ParseStyle
     warning: str | None = None
     provider: str
@@ -63,31 +58,27 @@ def _try_parse(text: str) -> LLMAnswer | None:
 
 
 class AnswerGenerator:
-    """Runs the answer prompt through an LLM (normally the fallback router)."""
+    """Runs the answer prompt through an LLM whose streams return LLMAnswer JSON."""
 
     def __init__(self, llm: LLMClient, max_tokens: int) -> None:
         self._llm = llm
         self._max_tokens = max_tokens
 
-    async def generate(
-        self, messages: list[Message]
-    ) -> AsyncIterator[GeneratedToken | GeneratedAnswer]:
-        """Yield GeneratedToken events, then exactly one GeneratedAnswer."""
+    async def generate(self, messages: list[Message]) -> AsyncIterator[Token | Final]:
+        """Yield Token events, then exactly one Final."""
         streamer, shown = FieldStreamer("answer"), ""
         provider, input_tokens, output_tokens = "", 0, 0
-        async for delta in self._llm.stream(
-            messages, json_schema=LLMAnswer, max_tokens=self._max_tokens
-        ):
+        async for delta in self._llm.stream(messages, max_tokens=self._max_tokens):
             provider = delta.provider or provider
             if delta.done:
                 input_tokens, output_tokens = delta.input_tokens, delta.output_tokens
                 continue
             if text := streamer.feed(delta.text):
                 shown += text
-                yield GeneratedToken(text=text)
+                yield Token(text=text)
         answer, style, warning = parse_answer(streamer.raw, shown)
-        yield GeneratedAnswer(
-            answer=answer,
+        yield Final(
+            parsed=answer,
             style=style,
             warning=warning,
             provider=provider,

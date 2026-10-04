@@ -191,3 +191,26 @@ class SearchIndex(Section):
     name: str
     type: Literal["search", "vectorSearch"]
     definition: dict[str, Any]
+
+
+class RetrievalCfg(Section):
+    """What the vector store and its pipelines need, gathered from several sections.
+
+    This is the ``cfg: RetrievalCfg`` of hybrid_pipeline and MongoVectorStore in
+    docs/DESIGN.md. Build it with Settings.retrieval_cfg().
+    """
+
+    fusion: Literal["server", "app"]
+    vector_index: str
+    text_index: str
+    num_candidates: int
+    vector_k: int
+    text_k: int
+    fused_k: int
+    w_vector: float
+    w_text: float
+    bulk_batch: int
+    sync_poll_interval_s: float
+    index_ready_timeout_s: float
+    index_poll_interval_s: float
+    search_indexes: list[SearchIndex]

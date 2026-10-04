@@ -9,15 +9,13 @@ from docqa.retrieval.abstention import should_abstain
 from docqa.retrieval.rrf import rrf_fuse
 from docqa.settings import load_settings
 
-CFG = load_settings(env_file=None).retrieval
+CFG = load_settings(env_file=None).retrieval_cfg(vector_index="vi")
 ACCESS = AccessFilter(owner_id="u1", doc_ids=["d1", "d2"])
 ALLOWED_IN_BRANCH = {"$search", "$vectorSearch", "$match", "$sort", "$geoNear", "$limit"}
 
 
 def hybrid(access=ACCESS):
-    return hybrid_pipeline(
-        [0.1, 0.2], "refund window", access, CFG, vector_index="vi", text_index="ti"
-    )
+    return hybrid_pipeline([0.1, 0.2], "refund window", access, CFG)
 
 
 # ---------------------------------------------------------------- pipeline shape
@@ -52,8 +50,8 @@ def test_project_and_limits_come_after_fusion():
 def test_weights_and_score_details_come_from_config():
     fusion = hybrid()[0]["$rankFusion"]
     assert fusion["combination"]["weights"] == {
-        "vector": CFG.weights.vector,
-        "text": CFG.weights.text,
+        "vector": CFG.w_vector,
+        "text": CFG.w_text,
     }
     assert fusion["scoreDetails"] is True
 
@@ -70,15 +68,15 @@ def test_every_pipeline_refuses_an_empty_filter(access):
     with pytest.raises(AccessFilterMissingError):
         hybrid(access)
     with pytest.raises(AccessFilterMissingError):
-        vector_only_pipeline([0.1], access, CFG, vector_index="vi")
+        vector_only_pipeline([0.1], access, CFG)
     with pytest.raises(AccessFilterMissingError):
-        text_only_pipeline("q", access, CFG, text_index="ti")
+        text_only_pipeline("q", access, CFG)
 
 
 def test_single_branch_pipelines_project_out_vectors():
     for pipeline in (
-        vector_only_pipeline([0.1], ACCESS, CFG, vector_index="vi"),
-        text_only_pipeline("q", ACCESS, CFG, text_index="ti"),
+        vector_only_pipeline([0.1], ACCESS, CFG),
+        text_only_pipeline("q", ACCESS, CFG),
     ):
         assert {"$project": {"embedding": 0}} in pipeline
 

@@ -43,11 +43,7 @@ class StubLLM:
         return LLMResult(text=self.reply, provider=self.name, input_tokens=1, output_tokens=1)
 
     async def stream(
-        self,
-        messages: list[Message],
-        *,
-        json_schema: type[BaseModel] | None = None,
-        max_tokens: int = 512,
+        self, messages: list[Message], *, max_tokens: int = 512
     ) -> AsyncIterator[LLMDelta]:
         """Stream the canned reply in pieces."""
         self.calls.append(messages)
