@@ -72,7 +72,7 @@ async def _server(
         raise ConfigurationError(
             f"The cluster rejected $rankFusion ({err.code}); set retrieval.fusion: app."
         ) from err
-    return [_from_fused(doc) for doc in docs]
+    return [from_fused(doc) for doc in docs]
 
 
 async def _app(
@@ -109,11 +109,16 @@ async def _aggregate(chunks: AsyncCollection[Document], pipeline: list[Stage]) -
         return await (await chunks.aggregate(pipeline)).to_list()
 
 
-def _from_fused(doc: Document) -> RetrievedChunk:
-    """Read the fused score and each branch's rank from $rankFusion's scoreDetails."""
+def from_fused(doc: Document) -> RetrievedChunk:
+    """Read the fused score and each branch's rank from $rankFusion's scoreDetails.
+
+    A branch that did not return the chunk reports rank "NA"; that becomes None.
+    """
     details: dict[str, Any] = doc.get("fusion", {})
     ranks = {
-        d["inputPipelineName"]: int(d["rank"]) for d in details.get("details", []) if d.get("rank")
+        d["inputPipelineName"]: d["rank"]
+        for d in details.get("details", [])
+        if isinstance(d.get("rank"), int)
     }
     return codecs.retrieved_from_bson(
         doc, float(details.get("value", 0.0)), ranks.get("vector"), ranks.get("text")

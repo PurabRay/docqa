@@ -159,3 +159,28 @@ def test_cross_encoder_sorts_by_score_and_keeps_top_k(caplog):
 def test_noop_reranker_keeps_fused_order():
     chunks = [retrieved("a"), retrieved("b"), retrieved("c")]
     assert NoopReranker().rerank("q", chunks, top_k=2) == chunks[:2]
+
+
+def test_score_details_rank_na_becomes_none():
+    # $rankFusion reports rank "NA" for a branch that did not return the chunk.
+    from docqa.adapters.vectorstore.mongo_search import from_fused
+
+    doc = {
+        "_id": "c1",
+        "doc_id": "d",
+        "owner_id": "u",
+        "filename": "f",
+        "text": "t",
+        "page_start": 1,
+        "page_end": 1,
+        "content_hash": "h",
+        "fusion": {
+            "value": 0.0164,
+            "details": [
+                {"inputPipelineName": "vector", "rank": 1, "weight": 1},
+                {"inputPipelineName": "text", "rank": "NA", "weight": 1},
+            ],
+        },
+    }
+    result = from_fused(doc)
+    assert (result.vector_rank, result.text_rank, result.fused_score) == (1, None, 0.0164)

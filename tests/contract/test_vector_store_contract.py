@@ -11,6 +11,7 @@ import pytest
 
 from docqa.adapters.vectorstore.memory_store import MemoryVectorStore
 from docqa.adapters.vectorstore.mongo_store import MongoVectorStore
+from docqa.bootstrap import build_container, init_database
 from docqa.domain.models import AccessFilter, Chunk, EmbeddedChunk, HybridQuery, chunk_id
 
 STORES = [
@@ -54,7 +55,9 @@ async def store(request, settings):
     if request.param == "memory":
         yield MemoryVectorStore(retrieval)
         return
-    container = request.getfixturevalue("initialized")
+    request.getfixturevalue("test_database")  # sync fixture: drops the database afterwards
+    container = build_container(settings)
+    await init_database(container)
     yield MongoVectorStore(
         container.mongo.db,
         settings.mongodb,
@@ -63,6 +66,7 @@ async def store(request, settings):
         settings.embedding.dense_model,
         list(settings.search_indexes.values()),
     )
+    await container.close()
 
 
 @pytest.fixture
