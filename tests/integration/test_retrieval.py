@@ -1,8 +1,8 @@
 """Hybrid retrieval and re-ranking on text.pdf with the real models and atlas-local."""
 
 import asyncio
-import os
 import json
+import os
 import time
 from pathlib import Path
 
