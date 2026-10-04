@@ -1,16 +1,21 @@
 """Hybrid retrieval and re-ranking on text.pdf with the real models and atlas-local."""
 
 import asyncio
+import json
 import time
 from pathlib import Path
 
 import pytest
 import pytest_asyncio
 
+from docqa.adapters.llm.stub import StubLLM
 from docqa.adapters.rerank.cross_encoder import FastEmbedReranker
 from docqa.adapters.vectorstore.mongo_store import MongoVectorStore
-from docqa.bootstrap import build_container, init_database
+from docqa.bootstrap import build_container, build_query_stack, init_database
 from docqa.domain.models import AccessFilter, IngestionStatus
+from docqa.generation.answer_generator import AnswerGenerator
+from docqa.generation.citation_validator import validate_citations
+from docqa.generation.prompt_builder import build_messages
 from docqa.retrieval.hybrid_retriever import HybridRetriever
 from tests.fixtures.make_fixtures import KNOWN_SENTENCES
 
@@ -87,3 +92,33 @@ async def test_reranker_puts_the_relevant_passage_first(ingested):
     elapsed_ms = (time.perf_counter() - start) * 1000
     print(f"\nre-rank 20 pairs: {elapsed_ms:.0f} ms (budget {RERANK_BUDGET_MS} ms)")
     assert elapsed_ms < RERANK_BUDGET_MS
+
+
+async def test_answer_flow_cites_the_correct_page(ingested):
+    """retrieve -> re-rank -> prompt -> (stub) LLM -> validate, as scripts/ask_once.py does."""
+    container, access = ingested
+    settings = container.settings
+    stack = build_query_stack(settings, container)
+    question = "What is the refund window?"
+    candidates = await retriever(container, "server").retrieve(question, access)
+    top = await asyncio.to_thread(
+        stack.reranker.rerank, question, candidates, settings.retrieval.top_k
+    )
+    messages = build_messages(stack.answer_prompt, top, question, 6000, stack.count_tokens)
+    refund = next(c for c in top if REFUND in c.chunk.text)
+    assert f"id={refund.chunk.id}" in messages[1].content
+
+    reply = json.dumps(
+        {
+            "answer": "Customers have 30 days.",
+            "citations": [
+                {"chunk_id": refund.chunk.id, "quote": REFUND},
+                {"chunk_id": "invented-id", "quote": "anything"},
+            ],
+            "sufficient_context": True,
+        }
+    )
+    events = [e async for e in AnswerGenerator(StubLLM(reply), 600).generate(messages)]
+    validated = validate_citations(events[-1].answer, top)
+    assert validated.verified and validated.dropped == 1
+    assert [(c.doc_name, c.page) for c in validated.citations] == [("text.pdf", 3)]

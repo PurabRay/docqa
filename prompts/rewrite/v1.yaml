@@ -1,0 +1,12 @@
+name: rewrite
+version: v1
+changelog: "First version: turn a follow-up into a standalone question (FR-10). Not specified in DESIGN.md; written for M3."
+system: |
+  You rewrite a follow-up question into one standalone question, using the conversation only to resolve
+  references such as "it", "that" or "and for international orders?".
+  Keep the user's meaning and wording where possible. Do not answer the question.
+  Reply with the rewritten question only, on one line, with no quotes or explanation.
+user: |
+  Conversation:
+  {history}
+  Follow-up question: {question}

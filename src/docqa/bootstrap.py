@@ -8,10 +8,14 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from docqa.adapters.embedding.fastembed_dense import FastEmbedDenseEmbedder
+from docqa.adapters.llm.circuit_breaker import CircuitBreaker
+from docqa.adapters.llm.openai_compatible import OpenAICompatibleLLM
+from docqa.adapters.llm.router import FallbackLLMRouter
 from docqa.adapters.mongo.client import MongoConnection
 from docqa.adapters.mongo.health import MongoHealthProbe
 from docqa.adapters.mongo.indexes import IndexAction, initialize_database
@@ -19,17 +23,24 @@ from docqa.adapters.mongo.storage_meter import MongoStorageMeter
 from docqa.adapters.rerank.cross_encoder import FastEmbedReranker
 from docqa.adapters.storage.mongo_repository import MongoDocumentRepository
 from docqa.adapters.vectorstore.mongo_store import MongoVectorStore
+from docqa.generation.answer_generator import AnswerGenerator
+from docqa.generation.prompt_registry import PromptRegistry, PromptTemplate
 from docqa.guardrails.storage_guard import StorageGuard
 from docqa.ingestion.sanitizer import compile_patterns
+from docqa.ingestion.text_split import TokenCounter, token_counter
 from docqa.ingestion.worker import IngestionWorker
 from docqa.ports.embedder import DenseEmbedder
 from docqa.ports.health import HealthProbe
+from docqa.ports.llm import LLMClient
 from docqa.ports.repository import DocumentRepository
 from docqa.ports.reranker import Reranker
 from docqa.retrieval.hybrid_retriever import HybridRetriever
+from docqa.retrieval.query_rewriter import QueryRewriter
 from docqa.services.document_service import DocumentService
 from docqa.services.ingestion_service import IngestionService
 from docqa.settings import Settings
+
+log = logging.getLogger(__name__)
 
 
 @dataclass
@@ -118,14 +129,47 @@ class QueryStack:
 
     retriever: HybridRetriever
     reranker: Reranker
+    llm: LLMClient
+    generator: AnswerGenerator
+    rewriter: QueryRewriter
+    answer_prompt: PromptTemplate
+    count_tokens: TokenCounter
+
+
+def build_llm_router(settings: Settings) -> FallbackLLMRouter:
+    """One client per provider in llm.router order; providers missing their key are left out."""
+    llm, clients = settings.llm, []
+    for name in llm.router:
+        provider = llm.providers[name]
+        key = settings.optional_secret(provider.api_key_env) if provider.api_key_env else None
+        if provider.api_key_env and key is None:
+            log.warning(
+                "llm.provider_skipped name=%s reason=%s not set", name, provider.api_key_env
+            )
+            continue
+        clients.append(OpenAICompatibleLLM(name, provider, key))
+    cb = llm.circuit_breaker
+    breakers = {
+        c.name: CircuitBreaker(c.name, cb.failures_to_open, cb.open_seconds) for c in clients
+    }
+    return FallbackLLMRouter(clients, breakers, llm.retry_on_minute_429, llm.retry_wait_s)
 
 
 def build_query_stack(settings: Settings, container: Container) -> QueryStack:
-    """Build retrieval and re-ranking on top of the container's store and embedder."""
-    retrieval = settings.retrieval
+    """Build retrieval, re-ranking and generation on top of the container."""
+    retrieval, generation = settings.retrieval, settings.generation
+    prompts = PromptRegistry(settings.prompts_dir)
+    llm = build_llm_router(settings)
     return QueryStack(
         retriever=HybridRetriever(container.embedder, container.store, retrieval.fused_k),
         reranker=FastEmbedReranker(retrieval.rerank_model, retrieval.rerank_max_tokens),
+        llm=llm,
+        generator=AnswerGenerator(llm, generation.max_answer_tokens),
+        rewriter=QueryRewriter(
+            llm, prompts.get("rewrite", settings.prompts.rewrite), generation.max_rewrite_tokens
+        ),
+        answer_prompt=prompts.get("answer", settings.prompts.answer),
+        count_tokens=token_counter(settings.chunking.tokenizer),
     )
 
 
