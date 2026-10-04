@@ -94,6 +94,9 @@ class RecordingRunner:
         if self.fail_first and len(self.seen) == 1:
             raise RuntimeError("bug")
 
+    async def mark_failed(self, job, message):
+        self.seen.append(f"failed:{job.doc_id}")
+
 
 async def test_worker_runs_jobs_in_order_and_survives_a_crash():
     runner = RecordingRunner(fail_first=True)
@@ -102,7 +105,7 @@ async def test_worker_runs_jobs_in_order_and_survives_a_crash():
         worker.submit(job().model_copy(update={"doc_id": doc_id}))
     await worker.run_once()
     await worker.run_once()
-    assert runner.seen == ["a", "b"]
+    assert runner.seen == ["a", "failed:a", "b"]
 
 
 def test_full_queue_is_rate_limited():

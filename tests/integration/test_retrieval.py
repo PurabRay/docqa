@@ -2,7 +2,6 @@
 
 import asyncio
 import json
-import os
 import time
 from pathlib import Path
 
@@ -89,12 +88,6 @@ async def test_reranker_puts_the_relevant_passage_first(ingested):
 
 
 @pytest.mark.slow
-@pytest.mark.xfail(
-    bool(os.environ.get("CI")),
-    reason="GitHub's shared runner CPU is ~2x slower than the budget allows (measured 859 ms); "
-    "the budget is checked on demo hardware",
-    strict=False,
-)
 async def test_rerank_20_pairs_within_budget(ingested):
     container, access = ingested
     settings = container.settings

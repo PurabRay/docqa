@@ -52,7 +52,11 @@ class IngestionService:
             await self._run(job)
         except DocQAError as err:
             log.warning("ingest.failed doc_id=%s code=%s", job.doc_id, err.code)
-            await self._repo.set_status(job.doc_id, IngestionStatus.FAILED, error=err.message)
+            await self.mark_failed(job, err.message)
+
+    async def mark_failed(self, job: IngestJob, message: str) -> None:
+        """Set the document's status to failed with a user-facing message."""
+        await self._repo.set_status(job.doc_id, IngestionStatus.FAILED, error=message)
 
     async def _run(self, job: IngestJob) -> None:
         await self._repo.set_status(job.doc_id, IngestionStatus.EXTRACTING)

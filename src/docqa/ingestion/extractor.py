@@ -13,13 +13,27 @@ from pathlib import Path
 import pdfplumber
 import pymupdf4llm
 
+from docqa.domain.errors import InvalidUploadError
 from docqa.domain.models import Page
 
 TABLE_ROW = re.compile(r"^\|.*\|\s*$")
 
 
 def extract_pages(path: Path, doc_id: str) -> list[Page]:
-    """Extract every page with its headings; page numbers are 1-based."""
+    """Extract every page with its headings; page numbers are 1-based.
+
+    Raises:
+        InvalidUploadError: The PDF libraries could not read the file.
+    """
+    try:
+        return _extract(path, doc_id)
+    except Exception as err:
+        # Vendor boundary: PyMuPDF, pymupdf4llm and pdfplumber raise many unrelated
+        # types (RuntimeError, ValueError, IndexError, ...) on malformed PDFs.
+        raise InvalidUploadError("The PDF could not be read; it may be damaged.") from err
+
+
+def _extract(path: Path, doc_id: str) -> list[Page]:
     page_chunks = pymupdf4llm.to_markdown(str(path), page_chunks=True, show_progress=False)
     pages = []
     for number, chunk in enumerate(page_chunks, start=1):

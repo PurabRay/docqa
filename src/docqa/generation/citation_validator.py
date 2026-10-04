@@ -36,8 +36,8 @@ class ValidatedAnswer(BaseModel):
 
 
 def normalise(text: str) -> str:
-    """Straight quotes, single spaces, no Markdown bold markers, trimmed."""
-    return WHITESPACE.sub(" ", text.translate(QUOTE_CHARS).replace("**", "")).strip()
+    """Straight quotes, single spaces, trimmed. Everything else must match exactly."""
+    return WHITESPACE.sub(" ", text.translate(QUOTE_CHARS)).strip()
 
 
 def validate_citations(answer: LLMAnswer, chunks: list[RetrievedChunk]) -> ValidatedAnswer:

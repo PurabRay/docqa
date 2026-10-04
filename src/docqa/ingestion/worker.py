@@ -9,10 +9,12 @@ import asyncio
 import logging
 from typing import Protocol
 
-from docqa.domain.errors import RateLimitedError
+from docqa.domain.errors import DocQAError, RateLimitedError
 from docqa.domain.models import IngestJob
 
 log = logging.getLogger(__name__)
+
+CRASH_MESSAGE = "Ingestion failed unexpectedly; please upload the file again."
 
 
 class JobRunner(Protocol):
@@ -20,6 +22,10 @@ class JobRunner(Protocol):
 
     async def ingest(self, job: IngestJob) -> None:
         """Ingest one document."""
+        ...
+
+    async def mark_failed(self, job: IngestJob, message: str) -> None:
+        """Set the document's status to failed with ``message``."""
         ...
 
 
@@ -51,12 +57,20 @@ class IngestionWorker:
         job = await self._queue.get()
         try:
             await self._runner.ingest(job)
-        except Exception:
+        except Exception as err:
             # Process boundary: the runner already marks DocQAErrors as failed. Anything
-            # else is a bug; log it and keep the worker alive for the next document.
-            log.exception("ingest.crashed doc_id=%s", job.doc_id)
+            # else is a bug. Mark the document failed (never leave it stuck in
+            # "extracting"), log only the error type (no document text), keep going.
+            log.error("ingest.crashed doc_id=%s error=%s", job.doc_id, type(err).__name__)
+            await self._mark_failed(job)
         finally:
             self._queue.task_done()
+
+    async def _mark_failed(self, job: IngestJob) -> None:
+        try:
+            await self._runner.mark_failed(job, CRASH_MESSAGE)
+        except DocQAError as err:  # e.g. the database is down too
+            log.error("ingest.mark_failed_failed doc_id=%s code=%s", job.doc_id, err.code)
 
     async def join(self) -> None:
         """Wait until every queued job is done (used by tests)."""
