@@ -1,8 +1,7 @@
 name: ci
 
 on:
-  push:
-    branches: [main]
+  push:          # every branch, so feature branches get checked before a PR
   pull_request:
 
 jobs:
@@ -30,9 +29,15 @@ jobs:
           --health-interval 5s --health-timeout 5s --health-retries 30
     env:
       MONGODB_URI: mongodb://localhost:27017/?directConnection=true
+      FASTEMBED_CACHE_PATH: /home/runner/.cache/fastembed
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
       - run: uv sync --frozen
+      - name: cache embedding model
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/fastembed
+          key: fastembed-${{ hashFiles('config/base.yaml') }}
       - name: integration tests
-        run: make test-int
+        run: uv run pytest -m integration -s -q   # -s shows ingestion time and bytes per chunk

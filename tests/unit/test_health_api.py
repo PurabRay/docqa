@@ -20,6 +20,9 @@ class FakeContainer:
         self.settings = load_settings(env_file=None)
         self.health = FakeProbe(health)
 
+    def start(self) -> None:
+        pass
+
     async def close(self) -> None:
         pass
 

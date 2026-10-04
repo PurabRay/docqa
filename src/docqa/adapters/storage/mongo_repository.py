@@ -45,14 +45,24 @@ class MongoDocumentRepository:
             raise DuplicateDocumentError() from err
 
     async def set_status(
-        self, doc_id: str, status: IngestionStatus, error: str | None = None
+        self,
+        doc_id: str,
+        status: IngestionStatus,
+        error: str | None = None,
+        chunk_count: int | None = None,
     ) -> None:
-        """Update a document's status and error message.
+        """Update a document's status, error and (optionally) chunk count.
 
         Raises:
             DocumentNotFoundError: No document has this id.
         """
-        update = {"status": status.value, "error": error, "updated_at": self._clock()}
+        update: dict[str, object] = {
+            "status": status.value,
+            "error": error,
+            "updated_at": self._clock(),
+        }
+        if chunk_count is not None:
+            update["chunk_count"] = chunk_count
         with translate_errors():
             result = await self._documents.update_one({"_id": doc_id}, {"$set": update})
         if result.matched_count == 0:

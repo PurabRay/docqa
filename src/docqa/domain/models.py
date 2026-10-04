@@ -103,6 +103,15 @@ class DocumentRecord(BaseModel):
     updated_at: datetime = Field(default_factory=utc_now)
 
 
+class IngestJob(BaseModel):
+    """One uploaded document waiting to be ingested."""
+
+    doc_id: str
+    owner_id: str
+    filename: str
+    path: str
+
+
 class Turn(BaseModel):
     """One chat message. Content is PII-scrubbed before it gets here."""
 

@@ -1,4 +1,8 @@
-"""domain/, ports/ and services/ may import only the stdlib, pydantic and each other."""
+"""Inner layers import only the stdlib, pydantic and the layers below them.
+
+domain/ and ports/ see only each other; services/ may also use the domain-logic
+packages (ingestion, retrieval, generation, guardrails) and the config schema.
+"""
 
 import ast
 import sys
@@ -8,7 +12,13 @@ import pytest
 
 SRC = Path(__file__).resolve().parents[2] / "src" / "docqa"
 ALLOWED_THIRD_PARTY = {"pydantic"}
-ALLOWED_INTERNAL = {"docqa.domain", "docqa.ports"}
+INNER = {"docqa.domain", "docqa.ports"}
+LOGIC = {"docqa.ingestion", "docqa.retrieval", "docqa.generation", "docqa.guardrails"}
+ALLOWED_INTERNAL = {
+    "domain": INNER,
+    "ports": INNER,
+    "services": INNER | LOGIC | {"docqa.config_schema"},
+}
 
 
 def imported_modules(path: Path) -> list[str]:
@@ -21,10 +31,10 @@ def imported_modules(path: Path) -> list[str]:
     return modules
 
 
-def is_allowed(module: str) -> bool:
+def is_allowed(module: str, layer: str = "domain") -> bool:
     top = module.split(".")[0]
     if top == "docqa":
-        return any(module == p or module.startswith(p + ".") for p in ALLOWED_INTERNAL)
+        return any(module == p or module.startswith(p + ".") for p in ALLOWED_INTERNAL[layer])
     return top in sys.stdlib_module_names or top in ALLOWED_THIRD_PARTY or top == "__future__"
 
 
@@ -33,7 +43,8 @@ INNER_FILES = [p for layer in ("domain", "ports", "services") for p in (SRC / la
 
 @pytest.mark.parametrize("path", INNER_FILES, ids=lambda p: str(p.relative_to(SRC)))
 def test_inner_layers_import_no_vendor_code(path):
-    bad = [m for m in imported_modules(path) if not is_allowed(m)]
+    layer = path.relative_to(SRC).parts[0]
+    bad = [m for m in imported_modules(path) if not is_allowed(m, layer)]
     assert not bad, f"{path.name} imports {bad}"
 
 
@@ -41,3 +52,6 @@ def test_checker_catches_a_vendor_import():
     assert not is_allowed("pymongo")
     assert not is_allowed("docqa.adapters.mongo.client")
     assert is_allowed("pydantic") and is_allowed("typing") and is_allowed("docqa.domain.models")
+    assert not is_allowed("docqa.ingestion.chunker", "domain")
+    assert is_allowed("docqa.ingestion.chunker", "services")
+    assert not is_allowed("docqa.adapters.mongo.client", "services")

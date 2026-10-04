@@ -11,6 +11,7 @@ dist/
 build/
 *.egg-info/
 .env
+data/
 .idea/
 .vscode/
 .DS_Store

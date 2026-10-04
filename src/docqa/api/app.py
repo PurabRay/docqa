@@ -11,7 +11,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from docqa.api.routers import health
+from docqa.api.routers import documents, health
 from docqa.api.schemas import ErrorBody
 from docqa.bootstrap import Container, build_container
 from docqa.domain.errors import DocQAError
@@ -33,6 +33,7 @@ def create_app(
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         container = build(settings or load_settings())
         app.state.container = container
+        container.start()
         try:
             yield
         finally:
@@ -40,6 +41,7 @@ def create_app(
 
     app = FastAPI(title="DocQA", lifespan=lifespan)
     app.include_router(health.router)
+    app.include_router(documents.router)
     app.add_exception_handler(DocQAError, _docqa_error_handler)  # type: ignore[arg-type]
     return app
 

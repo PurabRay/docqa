@@ -15,9 +15,13 @@ class DocumentRepository(Protocol):
         ...
 
     async def set_status(
-        self, doc_id: str, status: IngestionStatus, error: str | None = None
+        self,
+        doc_id: str,
+        status: IngestionStatus,
+        error: str | None = None,
+        chunk_count: int | None = None,
     ) -> None:
-        """Move a document to ``status``, recording ``error`` if it failed."""
+        """Move a document to ``status``; record ``error`` or the final ``chunk_count``."""
         ...
 
     async def get(self, doc_id: str, owner_id: str) -> DocumentRecord | None:
