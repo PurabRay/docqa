@@ -1,0 +1,20 @@
+# B-tree indexes per collection (docs/DESIGN.md "Collections").
+# "chunks" means the active chunks_<embed_model_slug> collection.
+# Key order matters: 1 = ascending, -1 = descending.
+
+documents:
+  - keys: {owner_id: 1, sha256: 1}
+    unique: true                    # duplicate upload -> HTTP 409
+  - keys: {owner_id: 1, created_at: -1}
+
+chunks:
+  - keys: {doc_id: 1, owner_id: 1}  # deletes and sync counts
+
+sessions:
+  - keys: {owner_id: 1}
+
+turns:
+  - keys: {session_id: 1, created_at: -1}
+
+feedback:
+  - keys: {trace_id: 1}

@@ -1,0 +1,13 @@
+# Free profile: hosted free-tier LLMs behind a router (Gemini -> Groq -> Ollama),
+# local FastEmbed models, MongoDB from MONGODB_URI (atlas-local or the Atlas free cluster).
+# base.yaml already holds the free-stack defaults, so this file only pins what the
+# free profile must never silently inherit if base.yaml changes.
+
+llm:
+  router: [gemini_flash, groq_oss_20b, ollama_qwen]
+
+embedding:
+  dense_model: "nomic-ai/nomic-embed-text-v1.5"
+  dim: 768
+
+tracing: {backend: langfuse, sample_judge_rate: 0.2}

@@ -1,0 +1,14 @@
+{
+  "name": "chunks_text",
+  "type": "search",
+  "definition": {
+    "mappings": {
+      "dynamic": false,
+      "fields": {
+        "text": {"type": "string", "analyzer": "lucene.english"},
+        "owner_id": {"type": "token"},
+        "doc_id": {"type": "token"}
+      }
+    }
+  }
+}

@@ -1,0 +1,7 @@
+# Local mode: nothing leaves the machine. Ollama SLM as the only generator,
+# atlas-local as the database, no hosted tracing.
+
+llm:
+  router: [ollama_qwen]
+
+tracing: {backend: noop, sample_judge_rate: 0.0}

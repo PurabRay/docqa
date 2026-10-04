@@ -1,0 +1,71 @@
+# Defaults for every setting. A profile (free.yaml, local.yaml or an ablation file)
+# is merged on top of this file, then secrets come from environment variables.
+# Only settings.py reads this file; see docs/DESIGN.md "LLD: configuration".
+
+llm:
+  router: [gemini_flash, groq_oss_20b, ollama_qwen]      # tried in order
+  providers:
+    gemini_flash:
+      base_url: "https://generativelanguage.googleapis.com/v1beta/openai/"
+      model: "gemini-flash-latest"
+      api_key_env: GEMINI_API_KEY
+      timeout_s: 8
+      json_schema: true
+    groq_oss_20b:
+      base_url: "https://api.groq.com/openai/v1"
+      model: "openai/gpt-oss-20b"
+      api_key_env: GROQ_API_KEY
+      timeout_s: 8
+      json_schema: false
+    ollama_qwen:
+      base_url: "http://ollama:11434/v1"
+      model: "qwen3.5:4b"
+      timeout_s: 60
+      json_schema: true
+  circuit_breaker: {failures_to_open: 3, open_seconds: 60}
+
+mongodb:
+  uri_env: MONGODB_URI              # atlas-local in dev/CI, Atlas free cluster in the demo
+  database: docqa
+  chunks_collection: "chunks_{embed_model_slug}"
+  vector_index: chunks_vector
+  text_index: chunks_text
+  bulk_batch: 64
+  sync_timeout_s: 30
+  max_pool_size: 20                 # free cluster allows 500 connections
+  server_selection_timeout_ms: 5000 # fail fast when the database is unreachable
+  index_ready_timeout_s: 300        # first build on a fresh atlas-local can take minutes
+  index_poll_interval_s: 2
+  storage_cap_mb: 400
+  max_documents: 500
+
+embedding:
+  dense_model: "nomic-ai/nomic-embed-text-v1.5"
+  dim: 768
+  storage: float32_binary
+
+chunking: {max_tokens: 512, overlap_tokens: 50, respect_headings: true}
+
+retrieval:
+  fusion: server                    # server = $rankFusion; app = two queries + rrf_fuse
+  vector_k: 20
+  text_k: 20
+  num_candidates: 200
+  fused_k: 20
+  weights: {vector: 1.0, text: 1.0} # RRF constant is fixed at 60 by $rankFusion
+  rerank_model: "Xenova/ms-marco-MiniLM-L-6-v2"
+  top_k: 5
+  abstain_threshold: 0.0            # calibrated on the golden dev split
+
+prompts: {answer: v1, rewrite: v1}
+
+limits:
+  max_pdf_mb: 25
+  max_pages: 300
+  max_question_chars: 500
+  max_context_tokens: 6000
+  questions_per_minute: 10
+
+cache: {backend: memory, ttl_seconds: 3600}   # "mongo" uses the answer_cache TTL collection
+
+tracing: {backend: langfuse, sample_judge_rate: 0.2}

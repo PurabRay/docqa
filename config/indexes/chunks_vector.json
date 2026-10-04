@@ -1,0 +1,17 @@
+{
+  "name": "chunks_vector",
+  "type": "vectorSearch",
+  "definition": {
+    "fields": [
+      {
+        "type": "vector",
+        "path": "embedding",
+        "numDimensions": "{embedding.dim}",
+        "similarity": "cosine",
+        "quantization": "scalar"
+      },
+      {"type": "filter", "path": "owner_id"},
+      {"type": "filter", "path": "doc_id"}
+    ]
+  }
+}
