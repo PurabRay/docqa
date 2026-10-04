@@ -40,7 +40,10 @@ jobs:
           path: ~/.cache/fastembed
           key: fastembed-${{ hashFiles('config/base.yaml') }}
       - name: integration tests
-        run: uv run pytest -m integration -s -q -rs | tee pytest.log  # -s prints ingestion numbers
-      - name: publish ingestion numbers as annotations
+        shell: bash  # explicit bash enables pipefail, so a pytest failure fails the step
+        run: uv run pytest -m integration -s -q -rfEs | tee pytest.log  # -s prints timings
+      - name: publish results as annotations (logs need sign-in; annotations do not)
         if: always()
-        run: grep -E "ready in|bytes per chunk|re-rank 20 pairs|passed|failed|skipped" pytest.log | sed 's/^/::notice::/' || true
+        run: |
+          grep -E "ready in|bytes per chunk|re-rank 20 pairs|passed|failed|skipped" pytest.log | sed 's/^/::notice::/' || true
+          grep -E "^(FAILED|ERROR) " pytest.log | cut -c1-900 | sed 's/^/::error::/' || true
