@@ -43,6 +43,7 @@ dev = [
     "testcontainers>=4.8",
     "locust>=2.31",
     "ragas>=0.2",
+    "langchain-community<0.4",
 ]
 
 [build-system]
@@ -67,7 +68,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["docqa", "tests"]
+known-first-party = ["docqa", "tests", "eval", "ui", "scripts"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"

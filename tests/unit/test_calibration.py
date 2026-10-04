@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 import pytest
+
 from eval.calibrate_threshold import choose_threshold
 
 SYNTHETIC = (

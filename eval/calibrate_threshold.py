@@ -4,9 +4,10 @@ The threshold is the highest best-score cut that abstains on at most
 ``generation.max_false_abstention_rate`` of the answerable questions.
 
 Usage:
-    uv run python eval/calibrate_threshold.py records.jsonl --session-id S
+    uv run python -m eval.calibrate_threshold            # dev split of eval/golden.jsonl
+    uv run python -m eval.calibrate_threshold records.jsonl --session-id S
 Records: one JSON object per line, {"question": str, "is_answerable": bool}.
-The documents searched are every ready document of that session's owner.
+Runs on the eval database; run eval/run_eval.py once first so the corpus is ingested.
 """
 
 from __future__ import annotations
@@ -55,7 +56,8 @@ async def best_scores(
     from docqa.retrieval.abstention import best_score
     from docqa.settings import load_settings
 
-    settings = load_settings()
+    base = load_settings()
+    settings = load_settings(overrides={"mongodb": {"database": base.eval.database}})
     container = build_container(settings)
     stack = container.query_deps
     owner = owner_id(session_id)
@@ -75,18 +77,38 @@ async def best_scores(
     return scored
 
 
+def dev_split_records(golden: Path) -> list[dict[str, object]]:
+    """The golden set's dev split as {question, is_answerable} records (frozen stays untouched)."""
+    from eval.schema import GoldenRecord
+
+    lines = [line for line in golden.read_text(encoding="utf-8").splitlines() if line.strip()]
+    records = [GoldenRecord.model_validate(json.loads(line)) for line in lines]
+    return [
+        {"question": r.question, "is_answerable": r.answerable} for r in records if r.split == "dev"
+    ]
+
+
 def main() -> None:
-    """CLI entry point."""
+    """CLI entry point. Default: the dev split of eval/golden.jsonl, on the eval corpus."""
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("records", type=Path)
-    parser.add_argument("--session-id", required=True)
+    parser.add_argument(
+        "records", type=Path, nargs="?", help="JSONL records; default: golden dev split"
+    )
+    parser.add_argument(
+        "--session-id", default="eval-corpus", help="owner of the searched documents"
+    )
     parser.add_argument("--max-false-rate", type=float, default=0.10)
     args = parser.parse_args()
-    records = [json.loads(line) for line in args.records.read_text().splitlines() if line.strip()]
+    if args.records:
+        lines = args.records.read_text().splitlines()
+        records = [json.loads(line) for line in lines if line.strip()]
+    else:
+        records = dev_split_records(Path(__file__).parent / "golden.jsonl")
     result = choose_threshold(
         asyncio.run(best_scores(records, args.session_id)), args.max_false_rate
     )
     print(result.model_dump_json(indent=2))
+    print("Copy the threshold into config (retrieval.abstain_threshold) and commit it.")
 
 
 if __name__ == "__main__":

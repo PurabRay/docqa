@@ -17,6 +17,7 @@ from docqa.domain.errors import ConfigurationError
 REQUIRED_PLACEHOLDERS = {
     "answer": ["{documents}", "{question}"],
     "rewrite": ["{history}", "{question}"],
+    "judge": ["{question}", "{answer}"],
 }
 
 

@@ -1,0 +1,59 @@
+name: eval
+
+# Golden-set eval gate, only when something that changes answers changes (PRD: CI/CD).
+on:
+  pull_request:
+    paths:
+      - "prompts/**"
+      - "config/**"
+      - "src/docqa/retrieval/**"
+      - "src/docqa/generation/**"
+      - "src/docqa/adapters/mongo/pipelines.py"
+
+permissions:
+  contents: read
+  pull-requests: write   # to post the report as a PR comment
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    services:
+      mongodb:
+        image: mongodb/mongodb-atlas-local:latest
+        ports: ["27017:27017"]
+        options: >-
+          --health-cmd "/usr/local/bin/runner healthcheck"
+          --health-interval 5s --health-timeout 5s --health-retries 30
+    env:
+      MONGODB_URI: mongodb://localhost:27017/?directConnection=true
+      FASTEMBED_CACHE_PATH: /home/runner/.cache/fastembed
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --frozen
+      - name: cache embedding model and generator outputs
+        uses: actions/cache@v4
+        with:
+          path: |
+            /home/runner/.cache/fastembed
+            eval/.cache
+          key: eval-${{ hashFiles('config/**', 'prompts/**') }}
+          restore-keys: eval-
+      - name: validate golden set
+        run: uv run python -m eval.validate_golden
+      - name: run dev split
+        run: uv run python -m eval.run_eval --config free --split dev --out eval/reports
+      - name: gate
+        run: uv run python -m eval.gate eval/reports/latest-dev.json
+      - name: post report
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = 'eval/reports/latest-dev.md';
+            const body = fs.existsSync(path) ? fs.readFileSync(path, 'utf8') : 'Eval did not produce a report.';
+            await github.rest.issues.createComment({...context.repo, issue_number: context.issue.number, body});

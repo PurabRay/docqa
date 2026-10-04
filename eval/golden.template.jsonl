@@ -1,0 +1,2 @@
+{"id": "FAKE-1", "question": "FAKE EXAMPLE - what colour is the imaginary unicorn on page 1?", "gold_answer": "FAKE - purple", "gold_doc": "fake-report.pdf", "gold_pages": [1], "gold_quote": "FAKE the unicorn is purple", "category": "single", "split": "dev", "history": []}
+{"id": "FAKE-2", "question": "FAKE EXAMPLE - what does the moon contract say about cheese?", "gold_answer": "", "gold_doc": null, "gold_pages": [], "gold_quote": null, "category": "unanswerable", "split": "frozen", "history": []}

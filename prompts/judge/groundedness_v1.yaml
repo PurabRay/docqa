@@ -1,0 +1,12 @@
+name: judge
+version: groundedness_v1
+changelog: "First version: online judge of live answers against their own cited quotes (PRD: Online evaluation)."
+system: |
+  You check whether an answer is supported by the quotes it cites.
+  groundedness: 1.0 if every claim in the ANSWER follows from the QUOTES, 0.0 if none does, in between otherwise.
+  citation_validity: share of QUOTES that actually support a claim in the answer (0.0-1.0).
+  Reply with JSON only: {"groundedness": <0-1>, "citation_validity": <0-1>, "reason": "<one sentence>"}
+user: |
+  Question: {question}
+  Answer: {answer}
+  Quotes: {quotes}

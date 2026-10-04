@@ -95,6 +95,22 @@ limits:
 
 cache: {backend: memory, ttl_seconds: 3600}   # "mongo" uses the answer_cache TTL collection
 
+eval:
+  # Judge: Mistral (a different model family from the Gemini generator). Not in llm.router.
+  judge: {base_url: "https://api.mistral.ai/v1", model: "mistral-small-latest",
+          api_key_env: MISTRAL_API_KEY, timeout_s: 30, json_schema: false}
+  judge_interval_s: 1.0             # Mistral Experiment plan allows ~1 request/s
+  judge_prompt: correctness_v1
+  online_judge_prompt: groundedness_v1
+  correct_score: 4                  # PRD: judge score >= 4 counts as correct
+  recall_k: 5
+  mrr_k: 20
+  database: docqa_eval              # a separate database on atlas-local, never the demo one
+  session_id: eval-corpus           # every corpus PDF belongs to this session's owner
+  corpus_dir: eval/corpus
+  cache_dir: eval/.cache            # generator outputs, so metric re-runs cost no quota
+  gate: {max_faithfulness_drop: 0.03, max_recall_drop: 0.03, min_citation_accuracy: 0.90}
+
 ui:
   api_url: "http://localhost:8000"  # DOCQA_API_URL overrides it (docker-compose sets it)
   max_uploads: 10                   # FR-1, enforced in the UI only (decision of 2026-10-04)

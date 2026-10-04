@@ -5,13 +5,13 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-from ui.api_client import ApiClient, ApiError
 
 from docqa.adapters.llm.stub import StubLLM
 from docqa.api.app import create_app
 from docqa.bootstrap import build_container, init_database
 from tests.e2e.test_query_api import CitingStub
 from tests.fixtures.make_fixtures import KNOWN_SENTENCES
+from ui.api_client import ApiClient, ApiError
 
 TEXT_PDF = Path(__file__).parents[1] / "fixtures" / "text.pdf"
 

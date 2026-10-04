@@ -2,11 +2,11 @@ from pathlib import Path
 
 import httpx
 import pytest
-from ui.api_client import ApiClient, ApiError, parse_sse_lines
 
 from docqa.domain.errors import InvalidUploadError
 from docqa.ingestion.highlights import find_quote
 from tests.fixtures.make_fixtures import KNOWN_SENTENCES
+from ui.api_client import ApiClient, ApiError, parse_sse_lines
 
 TEXT_PDF = Path(__file__).parents[1] / "fixtures" / "text.pdf"
 

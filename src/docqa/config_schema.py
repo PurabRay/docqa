@@ -158,6 +158,31 @@ class CacheConfig(Section):
     ttl_seconds: int = Field(ge=1)
 
 
+class GateConfig(Section):
+    """CI eval gate thresholds (PRD: CI/CD)."""
+
+    max_faithfulness_drop: float
+    max_recall_drop: float
+    min_citation_accuracy: float
+
+
+class EvalConfig(Section):
+    """Offline evaluation and the LLM judge."""
+
+    judge: ProviderConfig
+    judge_interval_s: float = Field(ge=0)
+    judge_prompt: str
+    online_judge_prompt: str
+    correct_score: int = Field(ge=1, le=5)
+    recall_k: int = Field(ge=1)
+    mrr_k: int = Field(ge=1)
+    database: str
+    session_id: str
+    corpus_dir: str
+    cache_dir: str
+    gate: GateConfig
+
+
 class UIConfig(Section):
     """Streamlit UI settings."""
 
@@ -201,6 +226,7 @@ class AppConfig(Section):
     prompts: PromptsConfig
     limits: LimitsConfig
     cache: CacheConfig
+    eval: EvalConfig
     ui: UIConfig
     alerts: AlertsConfig
     tracing: TracingConfig

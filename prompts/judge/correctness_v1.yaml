@@ -1,0 +1,13 @@
+name: judge
+version: correctness_v1
+changelog: "First version: 1-5 correctness of an answer against the gold answer (PRD: >= 4 counts as correct)."
+system: |
+  You grade answers to questions about documents. Compare the ANSWER with the GOLD ANSWER.
+  Score 5: same facts, nothing wrong. 4: correct, minor omissions. 3: partly correct.
+  2: mostly wrong or missing the key fact. 1: wrong, or answers when it should have said it could not find the answer.
+  If the gold answer is empty, the correct behaviour is to say the documents do not contain the answer.
+  Reply with JSON only: {"score": <1-5>, "reason": "<one sentence>"}
+user: |
+  Question: {question}
+  Gold answer: {gold_answer}
+  Answer: {answer}

@@ -167,7 +167,7 @@ class QueryService:
             return
         assert final is not None  # the generator always ends with exactly one Final
         validated = validate_citations(final.parsed, top)
-        async for event in self._finish(req, key, final, validated, trace_id, start):
+        async for event in self._finish(req, key, final, validated, trace_id, start, trace):
             yield event
 
     async def _retrieve(self, question: str, req: QueryRequest) -> list[RetrievedChunk]:
@@ -210,6 +210,7 @@ class QueryService:
         validated: ValidatedAnswer,
         trace_id: str,
         start: float,
+        trace: SpanHandle,
     ) -> AsyncIterator[QueryEvent]:
         yield Citations(citations=validated.citations, dropped=validated.dropped)
         if not validated.sufficient_context:
@@ -224,6 +225,9 @@ class QueryService:
         if validated.sufficient_context:
             await self.d.cache.set(key, answer, req.doc_ids)
         await self._append_turns(req, answer.text, trace_id)
+        # For scripts/online_judge.py: the cited quotes, PII-scrubbed like everything traced.
+        quotes = await asyncio.to_thread(scrub, "\n".join(c.quote for c in validated.citations))
+        trace.set(quotes=quotes, citations=len(validated.citations), dropped=validated.dropped)
         yield Completed(
             answer=answer,
             provider=final.provider,
