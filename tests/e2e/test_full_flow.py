@@ -26,21 +26,25 @@ pytestmark = pytest.mark.asyncio(loop_scope="module")
 FIXTURES = Path(__file__).parents[1] / "fixtures"
 SESSION = "full-flow"
 HEADERS = {"X-Session-Id": SESSION}
-FACTS = [KNOWN_SENTENCES[3], KNOWN_SENTENCES[11], "|Research|63|"]
+# fact -> the word a question must contain for that fact to answer it
+FACTS = {KNOWN_SENTENCES[3]: "refund", KNOWN_SENTENCES[11]: "leave", "|Research|63|": "research"}
 BLOCK = re.compile(r"\[BEGIN DOCUMENT id=(\S+) doc=\S+ page=\S+?\]\n(.*?)\n\[END DOCUMENT\]", re.S)
 DELETE_DEADLINE_S = 60  # FR-12
 
 
 class FactStub:
-    """Cites each known fact found in the prompt's documents; insufficient if none."""
+    """Cites the known facts the question asks about and the prompt contains; else insufficient."""
 
     name = "fact-stub"
 
     async def stream(self, messages, *, max_tokens=512):
+        prompt = messages[-1].content
+        question = prompt.rsplit("Question:", 1)[-1].lower()
         cites = [
             {"chunk_id": cid, "quote": fact}
-            for fact in FACTS
-            for cid, text in BLOCK.findall(messages[-1].content)
+            for fact, word in FACTS.items()
+            if word in question
+            for cid, text in BLOCK.findall(prompt)
             if fact in text
         ][:5]
         reply = {
