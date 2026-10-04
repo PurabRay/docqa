@@ -32,6 +32,7 @@ mongodb:
   text_index: chunks_text
   bulk_batch: 64
   sync_timeout_s: 30
+  sync_poll_interval_s: 1
   max_pool_size: 20                 # free cluster allows 500 connections
   server_selection_timeout_ms: 5000 # fail fast when the database is unreachable
   index_ready_timeout_s: 300        # first build on a fresh atlas-local can take minutes
@@ -41,10 +42,23 @@ mongodb:
 
 embedding:
   dense_model: "nomic-ai/nomic-embed-text-v1.5"
-  dim: 768
+  dim: 768                          # below the model's size = Matryoshka truncation
   storage: float32_binary
+  batch_size: 64
+  document_prefix: "search_document: "   # nomic needs task prefixes; "" for other models
+  query_prefix: "search_query: "
 
-chunking: {max_tokens: 512, overlap_tokens: 50, respect_headings: true}
+chunking: {max_tokens: 512, overlap_tokens: 50, respect_headings: true, tokenizer: cl100k_base}
+
+ingestion:
+  upload_dir: data/uploads          # uploaded PDFs, one file per doc_id
+  queue_size: 100                   # documents waiting; processed one at a time
+  injection_patterns:               # case-insensitive; a match flags the page, never deletes it
+    - 'ignore (all |any )?(previous|prior|above) instructions'
+    - 'disregard (all |any )?(previous|prior|above)'
+    - '(reveal|print|show) (me )?(the |your )?system prompt'
+    - 'you are now (a|an|the) '
+    - '</?(system|assistant)>'
 
 retrieval:
   fusion: server                    # server = $rankFusion; app = two queries + rrf_fuse
@@ -62,6 +76,7 @@ prompts: {answer: v1, rewrite: v1}
 limits:
   max_pdf_mb: 25
   max_pages: 300
+  min_chars_per_page: 50            # below this average the PDF counts as scanned (FR-2)
   max_question_chars: 500
   max_context_tokens: 6000
   questions_per_minute: 10

@@ -1,6 +1,6 @@
 """Domain models (docs/DESIGN.md, "Domain models"). No MongoDB, HTTP or vendor code here.
 
-Models for later milestones (Page, Citation, Answer, query events) are added
+Models for later milestones (Citation, Answer, query events) are added
 when the code that uses them lands.
 """
 
@@ -42,6 +42,16 @@ class IngestionStatus(StrEnum):
     READY = "ready"
     FAILED = "failed"
     DELETED = "deleted"
+
+
+class Page(BaseModel):
+    """One extracted PDF page as Markdown."""
+
+    doc_id: str
+    number: int = Field(ge=1)  # 1-based, as printed in citations
+    text: str
+    headings: list[str] = []
+    flagged_injection: bool = False
 
 
 class Chunk(BaseModel):

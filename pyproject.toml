@@ -64,6 +64,9 @@ ignore = [
     "D107",  # __init__ is documented on the class
 ]
 
+[tool.ruff.lint.isort]
+known-first-party = ["docqa", "tests"]
+
 [tool.ruff.lint.pydocstyle]
 convention = "google"
 
@@ -84,9 +87,16 @@ check_untyped_defs = true
 module = ["docqa.domain.*", "docqa.ports.*", "docqa.services.*"]
 strict = true
 
+# PDF libraries ship partial or no type hints; treat them as untyped.
+[[tool.mypy.overrides]]
+module = ["pymupdf", "pymupdf.*", "pymupdf4llm", "pymupdf4llm.*", "pdfplumber", "pdfplumber.*"]
+ignore_missing_imports = true
+follow_imports = "skip"
+
 # ---------------------------------------------------------------- pytest
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]  # lets tests import tests.fixtures.make_fixtures
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 addopts = "--strict-markers"

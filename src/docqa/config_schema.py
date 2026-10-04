@@ -59,6 +59,7 @@ class MongoConfig(Section):
     text_index: str
     bulk_batch: int = Field(ge=1)
     sync_timeout_s: float = Field(gt=0)
+    sync_poll_interval_s: float = Field(gt=0)
     max_pool_size: int = Field(ge=1)
     server_selection_timeout_ms: int = Field(ge=1)
     index_ready_timeout_s: float = Field(gt=0)
@@ -73,6 +74,9 @@ class EmbeddingConfig(Section):
     dense_model: str
     dim: int = Field(ge=1)
     storage: Literal["float32_binary"]
+    batch_size: int = Field(ge=1)
+    document_prefix: str
+    query_prefix: str
 
 
 class ChunkingConfig(Section):
@@ -81,6 +85,15 @@ class ChunkingConfig(Section):
     max_tokens: int = Field(ge=1)
     overlap_tokens: int = Field(ge=0)
     respect_headings: bool
+    tokenizer: str
+
+
+class IngestionConfig(Section):
+    """Upload storage, queue size and injection patterns."""
+
+    upload_dir: str
+    queue_size: int = Field(ge=1)
+    injection_patterns: list[str]
 
 
 class FusionWeights(Section):
@@ -116,6 +129,7 @@ class LimitsConfig(Section):
 
     max_pdf_mb: int = Field(ge=1)
     max_pages: int = Field(ge=1)
+    min_chars_per_page: int = Field(ge=0)
     max_question_chars: int = Field(ge=1)
     max_context_tokens: int = Field(ge=1)
     questions_per_minute: int = Field(ge=1)
@@ -142,6 +156,7 @@ class AppConfig(Section):
     mongodb: MongoConfig
     embedding: EmbeddingConfig
     chunking: ChunkingConfig
+    ingestion: IngestionConfig
     retrieval: RetrievalConfig
     prompts: PromptsConfig
     limits: LimitsConfig
