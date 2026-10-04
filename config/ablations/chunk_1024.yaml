@@ -1,0 +1,3 @@
+# Ablation: 1024-token chunks (own database: chunks are re-ingested).
+chunking: {max_tokens: 1024, overlap_tokens: 100}
+eval: {database: docqa_eval_chunk1024}

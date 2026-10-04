@@ -32,4 +32,4 @@ eval:
 	uv run python -m eval.run_eval --config free --split dev --out eval/reports
 
 load:
-	@echo "The Locust load test (scripts/locustfile.py) arrives in M5." && exit 1
+	uv run locust -f scripts/locustfile.py --headless -u 8 -r 8 -t 10m --host http://localhost:8000 --mode stub

@@ -1,0 +1,39 @@
+name: backup
+
+# The Atlas free cluster has no backups and pauses after 30 idle days (FREE_STACK.md).
+on:
+  schedule:
+    - cron: "30 2 * * *"   # nightly mongodump
+    - cron: "0 6 * * 1"    # weekly keep-alive ping
+  workflow_dispatch:
+
+jobs:
+  dump:
+    if: github.event.schedule != '0 6 * * 1'
+    runs-on: ubuntu-latest
+    steps:
+      - name: install mongodump
+        run: |
+          wget -q https://fastdl.mongodb.org/tools/db/mongodb-database-tools-ubuntu2204-x86_64-100.10.0.deb
+          sudo apt-get install -y ./mongodb-database-tools-ubuntu2204-x86_64-100.10.0.deb
+      - name: dump the docqa database
+        env:
+          MONGODB_URI_ATLAS: ${{ secrets.MONGODB_URI_ATLAS }}
+        run: mongodump --uri "$MONGODB_URI_ATLAS" --db docqa --gzip --archive=docqa-$(date +%F).archive.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: docqa-backup
+          path: docqa-*.archive.gz
+          retention-days: 14
+
+  keep-alive:
+    if: github.event.schedule == '0 6 * * 1'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --frozen
+      - name: ping the free cluster
+        env:
+          MONGODB_URI: ${{ secrets.MONGODB_URI_ATLAS }}
+        run: uv run python -m scripts.warmup --mongo-only

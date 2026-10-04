@@ -1,0 +1,2 @@
+# Ablation: 3 chunks to the LLM.
+retrieval: {top_k: 3}

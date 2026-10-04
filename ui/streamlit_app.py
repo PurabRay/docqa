@@ -29,10 +29,30 @@ NOTICES = {
 }
 
 
+IN_PROCESS = "inprocess"  # DOCQA_API_URL=inprocess: run the API inside this process
+
+
+@st.cache_resource
+def in_process_http() -> httpx.Client:
+    """Streamlit Community Cloud: one API app per server process, called without a network hop."""
+    from fastapi.testclient import TestClient
+
+    from docqa.api.app import create_app
+
+    client = TestClient(create_app())
+    client.__enter__()  # runs the lifespan (Mongo client, worker) for the process lifetime
+    return client
+
+
 def api() -> ApiClient:
     """One client per browser session, with its own session id."""
     if "api" not in st.session_state:
-        http = httpx.Client(base_url=SETTINGS.ui_api_url(), timeout=SETTINGS.ui.request_timeout_s)
+        url = SETTINGS.ui_api_url()
+        http = (
+            in_process_http()
+            if url == IN_PROCESS
+            else httpx.Client(base_url=url, timeout=SETTINGS.ui.request_timeout_s)
+        )
         st.session_state.api = ApiClient(http, session_id=uuid.uuid4().hex)
         st.session_state.messages = []
     client: ApiClient = st.session_state.api

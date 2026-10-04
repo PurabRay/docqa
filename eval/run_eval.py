@@ -12,6 +12,7 @@ import asyncio
 import sys
 from pathlib import Path
 
+from docqa.adapters.mongo.storage_meter import MongoStorageMeter
 from docqa.bootstrap import build_breakers, build_container, build_llm_router, init_database
 from docqa.generation.schemas import LLMAnswer
 from docqa.settings import Settings, load_settings
@@ -62,6 +63,7 @@ async def run(settings: Settings, split: str, out: Path) -> Path:
             container, Path(settings.eval.corpus_dir), settings.eval.session_id
         )
         results = await run_questions(container, records, doc_ids, settings.eval.session_id)
+        usage = await MongoStorageMeter(container.mongo.db).usage()
     finally:
         await container.close()
     scores = await judge_all(results, settings)
@@ -81,6 +83,11 @@ async def run(settings: Settings, split: str, out: Path) -> Path:
     report = build_report(
         results, scores, ragas, corpus_page_text(Path(settings.eval.corpus_dir)), settings, split
     )
+    report["storage"] = {
+        "size_mb": usage.size_mb,
+        "documents": usage.documents,
+        "mb_per_document": usage.size_mb / usage.documents if usage.documents else None,
+    }
     path = write_report(report, out)
     print(to_markdown(report))
     return path

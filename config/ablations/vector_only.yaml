@@ -1,0 +1,2 @@
+# Ablation: vector branch only (text branch weighted 0; app fusion allows a 0 weight).
+retrieval: {fusion: app, weights: {vector: 1.0, text: 0.0}}

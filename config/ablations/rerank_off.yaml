@@ -1,0 +1,2 @@
+# Ablation: no cross-encoder; the fused order goes to the LLM and abstention uses fused scores.
+retrieval: {rerank_enabled: false}

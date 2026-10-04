@@ -47,3 +47,37 @@ jobs:
         run: |
           grep -E "ready in|bytes per chunk|re-rank 20 pairs|passed|failed|skipped" pytest.log | sed 's/^/::notice::/' || true
           grep -E "^(FAILED|ERROR|XFAIL) " pytest.log | cut -c1-900 | sed 's/^/::error::/' || true
+
+  load:
+    # Stub load test (PRD: >= 2 queries/s at 8 users, < 1% errors, peak ops/s well under 60).
+    runs-on: ubuntu-latest
+    services:
+      mongodb:
+        image: mongodb/mongodb-atlas-local:latest
+        ports: ["27017:27017"]
+        options: >-
+          --health-cmd "/usr/local/bin/runner healthcheck"
+          --health-interval 5s --health-timeout 5s --health-retries 30
+    env:
+      MONGODB_URI: mongodb://localhost:27017/?directConnection=true
+      FASTEMBED_CACHE_PATH: /home/runner/.cache/fastembed
+      DOCQA_PROFILE: loadtest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --frozen
+      - uses: actions/cache@v4
+        with:
+          path: /home/runner/.cache/fastembed
+          key: fastembed-${{ hashFiles('config/base.yaml') }}
+      - run: uv run python scripts/init_db.py
+      - name: start the API
+        run: |
+          nohup uv run uvicorn docqa.api.app:create_app --factory --port 8000 > api.log 2>&1 &
+          for i in $(seq 1 120); do curl -sf localhost:8000/health && break; sleep 2; done
+      - name: locust, 8 users, 2 minutes
+        shell: bash
+        run: uv run locust -f scripts/locustfile.py --headless -u 8 -r 8 -t 2m --host http://localhost:8000 --mode stub --only-summary
+      - name: publish load numbers
+        if: always()
+        run: python -c "import json;r=json.load(open('eval/reports/load-stub.json'));print('::notice::load-stub '+json.dumps(r))" || true

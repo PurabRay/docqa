@@ -1,0 +1,3 @@
+# Ablation: nomic truncated to 512 dims (Matryoshka); own database and vector index size.
+embedding: {dim: 512}
+eval: {database: docqa_eval_dims512}

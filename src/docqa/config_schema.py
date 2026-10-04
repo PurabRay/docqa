@@ -29,6 +29,13 @@ class ProviderConfig(Section):
     extra_body: dict[str, Any] = {}
 
 
+class StubConfig(Section):
+    """StubLLM instead of real providers (load tests)."""
+
+    enabled: bool
+    delay_s: float = Field(ge=0)
+
+
 class CircuitBreakerConfig(Section):
     """When to stop calling a failing provider, and for how long."""
 
@@ -42,6 +49,7 @@ class LLMConfig(Section):
     router: list[str] = Field(min_length=1)
     providers: dict[str, ProviderConfig]
     circuit_breaker: CircuitBreakerConfig
+    stub: StubConfig
     retry_on_minute_429: int = Field(ge=0)
     retry_wait_s: float = Field(ge=0)
 
@@ -78,6 +86,7 @@ class EmbeddingConfig(Section):
     dense_model: str
     dim: int = Field(ge=1)
     storage: Literal["float32_binary"]
+    quantization: Literal["scalar", "none"]
     batch_size: int = Field(ge=1)
     document_prefix: str
     query_prefix: str
@@ -117,6 +126,7 @@ class RetrievalConfig(Section):
     fused_k: int = Field(ge=1)
     weights: FusionWeights
     rerank_model: str
+    rerank_enabled: bool
     top_k: int = Field(ge=1)
     abstain_threshold: float
     rerank_max_tokens: int = Field(ge=1)

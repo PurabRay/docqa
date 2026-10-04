@@ -1,0 +1,2 @@
+# Ablation: $rankFusion weights 2:1 in favour of the vector branch.
+retrieval: {weights: {vector: 2.0, text: 1.0}}

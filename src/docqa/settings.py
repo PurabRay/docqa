@@ -208,7 +208,10 @@ def _load_btree(path: Path) -> dict[str, list[BTreeIndex]]:
 
 def _load_search_indexes(folder: Path, app: AppConfig) -> dict[str, SearchIndex]:
     """Read config/indexes/*.json, filling "{embedding.dim}" from the embedding config."""
-    variables = {"embedding.dim": app.embedding.dim}
+    variables = {
+        "embedding.dim": app.embedding.dim,
+        "embedding.quantization": app.embedding.quantization,
+    }
     indexes = {}
     for path in sorted(folder.glob("*.json")):
         raw = json.loads(path.read_text(encoding="utf-8"))

@@ -24,6 +24,7 @@ llm:
       json_schema: true
       extra_body: {think: false}      # Ollama: no reasoning tokens (latency, broken JSON)
   circuit_breaker: {failures_to_open: 3, open_seconds: 60}
+  stub: {enabled: false, delay_s: 2.5}  # load tests: StubLLM at the measured Gemini latency
   retry_on_minute_429: 1            # retries after a per-minute 429; daily-quota 429s never retry
   retry_wait_s: 2
 
@@ -47,6 +48,7 @@ embedding:
   dense_model: "nomic-ai/nomic-embed-text-v1.5"
   dim: 768                          # below the model's size = Matryoshka truncation
   storage: float32_binary
+  quantization: scalar              # vector index quantization: scalar | none (ablation)
   batch_size: 64
   document_prefix: "search_document: "   # nomic needs task prefixes; "" for other models
   query_prefix: "search_query: "
@@ -71,6 +73,7 @@ retrieval:
   fused_k: 20
   weights: {vector: 1.0, text: 1.0} # RRF constant is fixed at 60 by $rankFusion
   rerank_model: "Xenova/ms-marco-MiniLM-L-6-v2"
+  rerank_enabled: true              # false = keep fused order (re-ranker-off ablation)
   top_k: 5
   abstain_threshold: 0.0            # calibrated on the golden dev split (eval/calibrate_threshold.py)
   rerank_max_tokens: 512            # MiniLM truncates longer (query, chunk) pairs

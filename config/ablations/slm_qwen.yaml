@@ -1,0 +1,2 @@
+# Ablation: local SLM (qwen3.5:4b on Ollama) instead of the hosted router.
+llm: {router: [ollama_qwen]}

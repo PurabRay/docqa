@@ -1,0 +1,7 @@
+# Load test (scripts/locustfile.py --stub): StubLLM at the measured Gemini latency, so the
+# numbers show the pipeline's capacity, not a provider's free-tier quota (FREE_STACK.md).
+llm:
+  stub: {enabled: true, delay_s: 2.5}
+limits:
+  questions_per_minute: 10000       # all Locust users share one session; the bucket is not under test
+tracing: {backend: noop}

@@ -20,11 +20,13 @@ from docqa.adapters.embedding.fastembed_dense import FastEmbedDenseEmbedder
 from docqa.adapters.llm.circuit_breaker import CircuitBreaker
 from docqa.adapters.llm.openai_compatible import OpenAICompatibleLLM
 from docqa.adapters.llm.router import FallbackLLMRouter
+from docqa.adapters.llm.stub import StubLLM
 from docqa.adapters.mongo.client import MongoConnection
 from docqa.adapters.mongo.health import MongoHealthProbe
 from docqa.adapters.mongo.indexes import IndexAction, initialize_database
 from docqa.adapters.mongo.storage_meter import MongoStorageMeter
 from docqa.adapters.rerank.cross_encoder import FastEmbedReranker
+from docqa.adapters.rerank.noop import NoopReranker
 from docqa.adapters.storage.mongo_repository import MongoDocumentRepository
 from docqa.adapters.tracing.langfuse_tracer import LangfuseTracer
 from docqa.adapters.tracing.noop_tracer import NoopTracer
@@ -54,6 +56,11 @@ from docqa.services.query_service import QueryDeps, QueryService
 from docqa.settings import Settings
 
 log = logging.getLogger(__name__)
+
+# Reply of the load-test stub: valid LLMAnswer JSON with no citations (shown as unverified).
+STUB_ANSWER = (
+    '{"answer": "Stub answer for load testing.", "citations": [], "sufficient_context": true}'
+)
 
 
 @dataclass
@@ -188,6 +195,9 @@ def build_query_deps(
 ) -> QueryDeps:
     """Everything the query use case needs."""
     prompts = PromptRegistry(settings.prompts_dir)
+    if settings.llm.stub.enabled:  # load tests: measure our pipeline, not a provider's quota
+        answer_llm = answer_llm or StubLLM(STUB_ANSWER, delay_s=settings.llm.stub.delay_s)
+        text_llm = text_llm or StubLLM("", delay_s=0)
     answer_llm = answer_llm or build_llm_router(settings, breakers, response_schema=LLMAnswer)
     text_llm = text_llm or build_llm_router(settings, breakers)
     gen, retrieval, llm = settings.generation, settings.retrieval, settings.llm
@@ -205,7 +215,9 @@ def build_query_deps(
             text_llm, prompts.get("rewrite", settings.prompts.rewrite), gen.max_rewrite_tokens
         ),
         retriever=HybridRetriever(embedder, store, retrieval.fused_k, tracer),
-        reranker=FastEmbedReranker(retrieval.rerank_model, retrieval.rerank_max_tokens),
+        reranker=FastEmbedReranker(retrieval.rerank_model, retrieval.rerank_max_tokens)
+        if retrieval.rerank_enabled
+        else NoopReranker(),
         prompt_builder=PromptBuilder(
             settings.limits.max_context_tokens, token_counter(settings.chunking.tokenizer)
         ),

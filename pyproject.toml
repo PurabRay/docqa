@@ -80,6 +80,7 @@ convention = "google"
 [tool.mypy]
 python_version = "3.11"
 files = ["src", "scripts"]
+exclude = ["scripts/locustfile.py"]  # locust and gevent ship no type hints
 mypy_path = "src"
 plugins = ["pydantic.mypy"]
 warn_unused_ignores = true

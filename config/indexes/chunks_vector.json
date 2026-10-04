@@ -8,7 +8,7 @@
         "path": "embedding",
         "numDimensions": "{embedding.dim}",
         "similarity": "cosine",
-        "quantization": "scalar"
+        "quantization": "{embedding.quantization}"
       },
       {"type": "filter", "path": "owner_id"},
       {"type": "filter", "path": "doc_id"}

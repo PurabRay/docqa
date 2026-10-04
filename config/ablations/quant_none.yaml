@@ -1,0 +1,3 @@
+# Ablation: no scalar quantization in the vector index (own database).
+embedding: {quantization: none}
+eval: {database: docqa_eval_quant_none}
