@@ -92,7 +92,9 @@ class AskUser(HttpUser):
     @task
     def ask(self) -> None:
         """One /query request, timed to the first token and to done."""
-        question = QUESTIONS[int(time.time() * 1000) % len(QUESTIONS)]
+        # A unique suffix defeats the answer cache, so every request runs the full pipeline.
+        STATE["n"] = STATE.get("n", 0) + 1
+        question = f"{QUESTIONS[STATE['n'] % len(QUESTIONS)]} (request {STATE['n']})"
         body = {"session_id": SESSION, "question": question, "doc_ids": STATE["doc_ids"]}
         start = time.perf_counter()
         with self.client.post(
@@ -133,7 +135,7 @@ def write_report(environment: Any, **_: Any) -> None:
     )
     report = {
         "mode": environment.parsed_options.mode,
-        "users": environment.runner.user_count,
+        "users": environment.parsed_options.num_users,
         "requests_per_s": query.total_rps,
         "error_rate": query.fail_ratio,
         "done_ms": {
@@ -146,6 +148,7 @@ def write_report(environment: Any, **_: Any) -> None:
         },
         "peak_ops_per_s": STATE["peak_ops"],
         "ops_cap": 100,
+        "errors": {str(e.error)[:200]: e.occurrences for e in stats.errors.values()},
     }
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     (REPORT_DIR / f"load-{report['mode']}.json").write_text(json.dumps(report, indent=2))

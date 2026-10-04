@@ -80,4 +80,6 @@ jobs:
         run: uv run locust -f scripts/locustfile.py --headless -u 8 -r 8 -t 2m --host http://localhost:8000 --mode stub --only-summary
       - name: publish load numbers
         if: always()
-        run: python -c "import json;r=json.load(open('eval/reports/load-stub.json'));print('::notice::load-stub '+json.dumps(r))" || true
+        run: |
+          python -c "import json;r=json.load(open('eval/reports/load-stub.json'));print('::notice::load-stub '+json.dumps(r))" || true
+          tail -20 api.log | sed 's/^/::notice::api.log /' || true

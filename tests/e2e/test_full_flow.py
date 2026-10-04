@@ -55,8 +55,13 @@ class FactStub:
 @pytest_asyncio.fixture(scope="module", loop_scope="module")
 async def api(settings, tmp_path_factory, test_database):
     upload_dir = str(tmp_path_factory.mktemp("full-flow"))
+    # The abstain threshold is not calibrated yet (needs the golden set), so this app never
+    # abstains on low relevance; unanswerable questions abstain via insufficient_context.
     app_settings = settings.model_copy(
-        update={"ingestion": settings.ingestion.model_copy(update={"upload_dir": upload_dir})}
+        update={
+            "ingestion": settings.ingestion.model_copy(update={"upload_dir": upload_dir}),
+            "retrieval": settings.retrieval.model_copy(update={"abstain_threshold": -1e9}),
+        }
     )
     app = create_app(
         app_settings,
